@@ -45,8 +45,8 @@ use serde::Deserialize;
 use serde::Serialize;
 use serde_json::json;
 use tokio::net::TcpListener;
-use tokio::sync::oneshot;
 use tokio::sync::Mutex;
+use tokio::sync::oneshot;
 use tracing::error;
 use tracing::info;
 use uuid::Uuid;
@@ -529,6 +529,7 @@ fn derive_config_from_params(params: NewConversationParams) -> std::io::Result<C
         approval_policy,
         sandbox: sandbox_mode,
         config: cli_overrides,
+        workspace_paths,
         base_instructions,
         include_plan_tool,
         include_apply_patch_tool,
@@ -549,8 +550,19 @@ fn derive_config_from_params(params: NewConversationParams) -> std::io::Result<C
         tools_web_search_request: None,
     };
 
+    let mut cli_overrides = cli_overrides.unwrap_or_default();
+    if let Some(paths) = workspace_paths {
+        let arr = paths
+            .into_iter()
+            .map(|p| serde_json::Value::String(p.to_string_lossy().into_owned()))
+            .collect();
+        cli_overrides.insert(
+            "sandbox_workspace_write.writable_roots".into(),
+            serde_json::Value::Array(arr),
+        );
+    }
+
     let cli_overrides = cli_overrides
-        .unwrap_or_default()
         .into_iter()
         .map(|(k, v)| (k, json_to_toml(v)))
         .collect();

@@ -133,6 +133,11 @@ pub struct NewConversationParams {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub config: Option<HashMap<String, serde_json::Value>>,
 
+    /// Additional filesystem paths to treat as writable when using
+    /// `sandbox = workspace-write`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub workspace_paths: Option<Vec<PathBuf>>,
+
     /// The set of instructions to use instead of the default ones.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub base_instructions: Option<String>,
