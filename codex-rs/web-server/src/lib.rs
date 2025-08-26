@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::net::SocketAddr;
+use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -15,6 +16,7 @@ use codex_core::ConversationManager;
 use codex_core::NewConversation;
 use codex_core::config::Config;
 use codex_core::config::ConfigOverrides;
+use codex_core::config::load_config_as_toml;
 use codex_core::protocol::InputItem as CoreInputItem;
 use codex_core::protocol::Op;
 use codex_login::AuthManager;
@@ -75,21 +77,27 @@ pub async fn run_main(opts: WebCli) -> Result<()> {
         .map_err(anyhow::Error::msg)?;
 
     let config = Config::load_with_cli_overrides(overrides_vec, ConfigOverrides::default())?;
+    let codex_home = config.codex_home.clone();
     let conversation_manager = ConversationManager::new(AuthManager::shared(
-        config.codex_home.clone(),
+        codex_home.clone(),
         config.preferred_auth_method,
     ));
 
-    let app = Router::new().route(
-        "/ws",
-        get({
-            let manager = conversation_manager.clone();
-            move |ws: WebSocketUpgrade| {
-                let manager = manager.clone();
-                async move { ws.on_upgrade(move |socket| handle_socket(socket, manager)) }
-            }
-        }),
-    );
+    let app =
+        Router::new().route(
+            "/ws",
+            get({
+                let manager = conversation_manager.clone();
+                let codex_home = codex_home.clone();
+                move |ws: WebSocketUpgrade| {
+                    let manager = manager.clone();
+                    let codex_home = codex_home.clone();
+                    async move {
+                        ws.on_upgrade(move |socket| handle_socket(socket, manager, codex_home))
+                    }
+                }
+            }),
+        );
 
     let addr: SocketAddr = addr.parse()?;
     let listener = TcpListener::bind(addr).await?;
@@ -108,7 +116,16 @@ struct ListSessionsResponse {
     sessions: Vec<ConversationId>,
 }
 
-async fn handle_socket(socket: WebSocket, conversation_manager: ConversationManager) {
+#[derive(Deserialize)]
+struct UpdateConfigParams {
+    config: serde_json::Value,
+}
+
+async fn handle_socket(
+    socket: WebSocket,
+    conversation_manager: ConversationManager,
+    codex_home: PathBuf,
+) {
     let (sender, mut receiver) = socket.split();
     let sender = Arc::new(Mutex::new(sender));
     let mut listeners: HashMap<Uuid, oneshot::Sender<()>> = HashMap::new();
@@ -211,6 +228,56 @@ async fn handle_socket(socket: WebSocket, conversation_manager: ConversationMana
                     let _ = conversation_manager
                         .remove_conversation(params.conversation_id.0)
                         .await;
+                    send_response(sender.clone(), id, json!({})).await;
+                }
+                "getConfig" => {
+                    let cfg = match load_config_as_toml(&codex_home) {
+                        Ok(c) => c,
+                        Err(err) => {
+                            send_invalid_request(
+                                sender.clone(),
+                                id,
+                                &format!("error loading config: {err}"),
+                            )
+                            .await;
+                            continue;
+                        }
+                    };
+                    let json_cfg = serde_json::to_value(cfg).unwrap_or_default();
+                    send_response(sender.clone(), id, json_cfg).await;
+                }
+                "updateConfig" => {
+                    let params: UpdateConfigParams =
+                        match req.params.and_then(|v| serde_json::from_value(v).ok()) {
+                            Some(p) => p,
+                            None => {
+                                send_invalid_request(sender.clone(), id, "missing params").await;
+                                continue;
+                            }
+                        };
+                    let mut current = match load_config_as_toml(&codex_home) {
+                        Ok(c) => c,
+                        Err(err) => {
+                            send_invalid_request(
+                                sender.clone(),
+                                id,
+                                &format!("error loading config: {err}"),
+                            )
+                            .await;
+                            continue;
+                        }
+                    };
+                    let updates = json_to_toml(params.config);
+                    merge_toml(&mut current, updates);
+                    if let Err(err) = write_config(&codex_home, &current) {
+                        send_invalid_request(
+                            sender.clone(),
+                            id,
+                            &format!("error saving config: {err}"),
+                        )
+                        .await;
+                        continue;
+                    }
                     send_response(sender.clone(), id, json!({})).await;
                 }
                 _ => {
@@ -492,6 +559,31 @@ async fn send_invalid_request(
         let mut guard = sender.lock().await;
         let _ = guard.send(Message::Text(text)).await;
     }
+}
+
+fn merge_toml(dst: &mut toml::Value, src: toml::Value) {
+    match (dst, src) {
+        (toml::Value::Table(dst_tbl), toml::Value::Table(src_tbl)) => {
+            for (k, v) in src_tbl {
+                match dst_tbl.get_mut(&k) {
+                    Some(existing) => merge_toml(existing, v),
+                    None => {
+                        dst_tbl.insert(k, v);
+                    }
+                }
+            }
+        }
+        (dst_val, src_val) => {
+            *dst_val = src_val;
+        }
+    }
+}
+
+fn write_config(codex_home: &Path, cfg: &toml::Value) -> std::io::Result<()> {
+    std::fs::create_dir_all(codex_home)?;
+    let config_path = codex_home.join("config.toml");
+    let text = toml::to_string(cfg).map_err(|e| std::io::Error::other(e))?;
+    std::fs::write(config_path, text)
 }
 
 fn json_to_toml(v: serde_json::Value) -> toml::Value {
