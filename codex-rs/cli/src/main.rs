@@ -15,6 +15,7 @@ use codex_cli::proto;
 use codex_common::CliConfigOverrides;
 use codex_exec::Cli as ExecCli;
 use codex_tui::Cli as TuiCli;
+use codex_web_server::WebCli;
 use std::path::PathBuf;
 
 use crate::proto::ProtoCli;
@@ -62,6 +63,9 @@ enum Subcommand {
     /// Run the Protocol stream via stdin/stdout
     #[clap(visible_alias = "p")]
     Proto(ProtoCli),
+
+    /// Run Codex as a WebSocket server.
+    Web(WebCli),
 
     /// Generate shell completion scripts.
     Completion(CompletionCommand),
@@ -183,6 +187,10 @@ async fn cli_main(codex_linux_sandbox_exe: Option<PathBuf>) -> anyhow::Result<()
         Some(Subcommand::Proto(mut proto_cli)) => {
             prepend_config_flags(&mut proto_cli.config_overrides, cli.config_overrides);
             proto::run_main(proto_cli).await?;
+        }
+        Some(Subcommand::Web(mut web_cli)) => {
+            prepend_config_flags(&mut web_cli.config_overrides, cli.config_overrides);
+            codex_web_server::run_main(web_cli).await?;
         }
         Some(Subcommand::Completion(completion_cli)) => {
             print_completion(completion_cli);
