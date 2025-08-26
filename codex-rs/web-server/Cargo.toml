@@ -17,9 +17,14 @@ clap = { version = "4", features = ["derive"] }
 codex-common = { path = "../common", features = ["cli"] }
 codex-core = { path = "../core" }
 codex-login = { path = "../login" }
+codex-protocol = { path = "../protocol" }
+mcp-types = { path = "../mcp-types" }
+serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+toml = "0.9"
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "signal"] }
 tracing = "0.1.41"
 tracing-subscriber = "0.3.19"
 futures = "0.3"
+uuid = { version = "1", features = ["serde", "v4"] }
 
