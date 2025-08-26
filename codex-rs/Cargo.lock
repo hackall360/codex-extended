@@ -1075,11 +1075,16 @@ dependencies = [
  "codex-common",
  "codex-core",
  "codex-login",
+ "codex-protocol",
  "futures",
+ "mcp-types",
+ "serde",
  "serde_json",
  "tokio",
+ "toml 0.9.5",
  "tracing",
  "tracing-subscriber",
+ "uuid",
 ]
 
 [[package]]

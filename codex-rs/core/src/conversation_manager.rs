@@ -28,6 +28,7 @@ pub struct NewConversation {
 
 /// [`ConversationManager`] is responsible for creating conversations and
 /// maintaining them in memory.
+#[derive(Clone)]
 pub struct ConversationManager {
     conversations: Arc<RwLock<HashMap<Uuid, Arc<CodexConversation>>>>,
     auth_manager: Arc<AuthManager>,
@@ -107,6 +108,21 @@ impl ConversationManager {
         conversations
             .get(&conversation_id)
             .cloned()
+            .ok_or_else(|| CodexErr::ConversationNotFound(conversation_id))
+    }
+
+    /// Return a list of active conversation ids.
+    pub async fn list_conversations(&self) -> Vec<Uuid> {
+        let conversations = self.conversations.read().await;
+        conversations.keys().copied().collect()
+    }
+
+    /// Remove a conversation from the registry.
+    pub async fn remove_conversation(&self, conversation_id: Uuid) -> CodexResult<()> {
+        let mut conversations = self.conversations.write().await;
+        conversations
+            .remove(&conversation_id)
+            .map(|_| ())
             .ok_or_else(|| CodexErr::ConversationNotFound(conversation_id))
     }
 
