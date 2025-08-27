@@ -38,6 +38,7 @@ pub use model_provider_info::built_in_model_providers;
 pub use model_provider_info::create_oss_provider_with_base_url;
 mod conversation_manager;
 pub use conversation_manager::ConversationManager;
+pub use conversation_manager::ConversationMetadata;
 pub use conversation_manager::NewConversation;
 pub mod model_family;
 mod openai_model_info;

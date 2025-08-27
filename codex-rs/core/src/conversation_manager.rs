@@ -1,10 +1,14 @@
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use codex_login::AuthManager;
 use codex_login::CodexAuth;
 use tokio::sync::RwLock;
 use uuid::Uuid;
+
+use serde::Deserialize;
+use serde::Serialize;
 
 use crate::codex::Codex;
 use crate::codex::CodexSpawnOk;
@@ -26,11 +30,24 @@ pub struct NewConversation {
     pub session_configured: SessionConfiguredEvent,
 }
 
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct ConversationMetadata {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub workspace_path: Option<PathBuf>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub custom_settings: Option<serde_json::Value>,
+}
+
+struct ConversationEntry {
+    conversation: Arc<CodexConversation>,
+    metadata: ConversationMetadata,
+}
+
 /// [`ConversationManager`] is responsible for creating conversations and
 /// maintaining them in memory.
 #[derive(Clone)]
 pub struct ConversationManager {
-    conversations: Arc<RwLock<HashMap<Uuid, Arc<CodexConversation>>>>,
+    conversations: Arc<RwLock<HashMap<Uuid, ConversationEntry>>>,
     auth_manager: Arc<AuthManager>,
 }
 
@@ -49,13 +66,23 @@ impl ConversationManager {
     }
 
     pub async fn new_conversation(&self, config: Config) -> CodexResult<NewConversation> {
-        self.spawn_conversation(config, self.auth_manager.clone())
+        self.new_conversation_with_metadata(config, ConversationMetadata::default())
+            .await
+    }
+
+    pub async fn new_conversation_with_metadata(
+        &self,
+        config: Config,
+        metadata: ConversationMetadata,
+    ) -> CodexResult<NewConversation> {
+        self.spawn_conversation(config, metadata, self.auth_manager.clone())
             .await
     }
 
     async fn spawn_conversation(
         &self,
         config: Config,
+        metadata: ConversationMetadata,
         auth_manager: Arc<AuthManager>,
     ) -> CodexResult<NewConversation> {
         let CodexSpawnOk {
@@ -65,13 +92,14 @@ impl ConversationManager {
             let initial_history = None;
             Codex::spawn(config, auth_manager, initial_history).await?
         };
-        self.finalize_spawn(codex, conversation_id).await
+        self.finalize_spawn(codex, conversation_id, metadata).await
     }
 
     async fn finalize_spawn(
         &self,
         codex: Codex,
         conversation_id: Uuid,
+        metadata: ConversationMetadata,
     ) -> CodexResult<NewConversation> {
         // The first event must be `SessionInitialized`. Validate and forward it
         // to the caller so that they can display it in the conversation
@@ -88,10 +116,13 @@ impl ConversationManager {
         };
 
         let conversation = Arc::new(CodexConversation::new(codex));
-        self.conversations
-            .write()
-            .await
-            .insert(conversation_id, conversation.clone());
+        self.conversations.write().await.insert(
+            conversation_id,
+            ConversationEntry {
+                conversation: conversation.clone(),
+                metadata,
+            },
+        );
 
         Ok(NewConversation {
             conversation_id,
@@ -107,7 +138,7 @@ impl ConversationManager {
         let conversations = self.conversations.read().await;
         conversations
             .get(&conversation_id)
-            .cloned()
+            .map(|e| e.conversation.clone())
             .ok_or_else(|| CodexErr::ConversationNotFound(conversation_id))
     }
 
@@ -136,6 +167,22 @@ impl ConversationManager {
         num_messages_to_drop: usize,
         config: Config,
     ) -> CodexResult<NewConversation> {
+        self.fork_conversation_with_metadata(
+            conversation_history,
+            num_messages_to_drop,
+            config,
+            ConversationMetadata::default(),
+        )
+        .await
+    }
+
+    pub async fn fork_conversation_with_metadata(
+        &self,
+        conversation_history: Vec<ResponseItem>,
+        num_messages_to_drop: usize,
+        config: Config,
+        metadata: ConversationMetadata,
+    ) -> CodexResult<NewConversation> {
         // Compute the prefix up to the cut point.
         let truncated_history =
             truncate_after_dropping_last_messages(conversation_history, num_messages_to_drop);
@@ -147,7 +194,37 @@ impl ConversationManager {
             session_id: conversation_id,
         } = Codex::spawn(config, auth_manager, Some(truncated_history)).await?;
 
-        self.finalize_spawn(codex, conversation_id).await
+        self.finalize_spawn(codex, conversation_id, metadata).await
+    }
+
+    pub async fn get_metadata(&self, conversation_id: Uuid) -> CodexResult<ConversationMetadata> {
+        let conversations = self.conversations.read().await;
+        conversations
+            .get(&conversation_id)
+            .map(|e| e.metadata.clone())
+            .ok_or_else(|| CodexErr::ConversationNotFound(conversation_id))
+    }
+
+    pub async fn export_conversation(
+        &self,
+        conversation_id: Uuid,
+    ) -> CodexResult<(Vec<ResponseItem>, ConversationMetadata)> {
+        let conversation = self.get_conversation(conversation_id).await?;
+        let history = conversation.history().await?;
+        let metadata = self.get_metadata(conversation_id).await?;
+        Ok((history, metadata))
+    }
+
+    pub async fn import_conversation(
+        &self,
+        history: Vec<ResponseItem>,
+        config: Config,
+        metadata: ConversationMetadata,
+    ) -> CodexResult<NewConversation> {
+        let auth_manager = self.auth_manager.clone();
+        let CodexSpawnOk { codex, session_id } =
+            Codex::spawn(config, auth_manager, Some(history)).await?;
+        self.finalize_spawn(codex, session_id, metadata).await
     }
 }
 

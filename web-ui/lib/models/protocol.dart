@@ -11,12 +11,14 @@ abstract class ProtocolMessage {
       case 'session_closed':
         return SessionClosed(json['id'] as String);
       case 'event':
-        return AgentEvent(
-          json['session'] as String,
-          json['data'] as String,
-        );
+        return AgentEvent(json['session'] as String, json['data'] as String);
       case 'config':
         return ConfigForm(Map<String, dynamic>.from(json['fields'] as Map));
+      case 'session_exported':
+        return SessionExported(
+          json['id'] as String,
+          List<String>.from(json['history'] as List),
+        );
       default:
         return UnknownMessage(json);
     }
@@ -37,6 +39,12 @@ class AgentEvent extends ProtocolMessage {
   final String session;
   final String data;
   const AgentEvent(this.session, this.data);
+}
+
+class SessionExported extends ProtocolMessage {
+  final String id;
+  final List<String> history;
+  const SessionExported(this.id, this.history);
 }
 
 class ConfigForm extends ProtocolMessage {
