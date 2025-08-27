@@ -39,6 +39,7 @@
 - [Memory & project docs](#memory--project-docs)
 - [Non-interactive / CI mode](#non-interactive--ci-mode)
 - [Model Context Protocol (MCP)](#model-context-protocol-mcp)
+- [Web UI](#web-ui)
 - [Tracing / verbose logging](#tracing--verbose-logging)
   - [DotSlash](#dotslash)
 - [Configuration](#configuration)
@@ -470,6 +471,10 @@ env = { "API_KEY" = "value" }
 
 > [!TIP]
 > It is somewhat experimental, but the Codex CLI can also be run as an MCP _server_ via `codex mcp`. If you launch it with an MCP client such as `npx @modelcontextprotocol/inspector codex mcp` and send it a `tools/list` request, you will see that there is only one tool, `codex`, that accepts a grab-bag of inputs, including a catch-all `config` map for anything you might want to override. Feel free to play around with it and provide feedback via GitHub issues.
+
+## Web UI
+
+An experimental browser interface is available. See [docs/web-ui.md](docs/web-ui.md) for instructions on starting the WebSocket-enabled CLI and serving the Flutter app.
 
 ## Tracing / verbose logging
 
