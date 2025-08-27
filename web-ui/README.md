@@ -2,6 +2,10 @@
 
 A new Flutter project.
 
+## Prerequisites
+
+Run `../scripts/install_deps.sh` from the repository root to install Rust, Python, Go, Dart, and Flutter before building.
+
 ## Getting Started
 
 This project is a starting point for a Flutter application.
