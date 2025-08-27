@@ -52,6 +52,18 @@ class _SessionListViewState extends State<SessionListView> {
                 _controller.clear();
               },
             ),
+            IconButton(
+              icon: const Icon(Icons.save),
+              onPressed: () {
+                widget.service.requestExport(_controller.text);
+              },
+            ),
+            IconButton(
+              icon: const Icon(Icons.upload),
+              onPressed: () {
+                widget.service.importFromLocal(_controller.text);
+              },
+            ),
           ],
         ),
       ],

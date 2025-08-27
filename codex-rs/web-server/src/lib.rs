@@ -13,6 +13,7 @@ use axum::routing::get;
 use clap::Parser;
 use codex_common::CliConfigOverrides;
 use codex_core::ConversationManager;
+use codex_core::ConversationMetadata;
 use codex_core::NewConversation;
 use codex_core::config::Config;
 use codex_core::config::ConfigOverrides;
@@ -34,6 +35,7 @@ use codex_protocol::mcp_protocol::SendUserMessageParams;
 use codex_protocol::mcp_protocol::SendUserMessageResponse;
 use codex_protocol::mcp_protocol::SendUserTurnParams;
 use codex_protocol::mcp_protocol::SendUserTurnResponse;
+use codex_protocol::models::ResponseItem;
 use futures::SinkExt;
 use futures::StreamExt;
 use futures::stream::SplitSink;
@@ -119,6 +121,32 @@ struct ListSessionsResponse {
 #[derive(Deserialize)]
 struct UpdateConfigParams {
     config: serde_json::Value,
+}
+
+#[derive(Deserialize)]
+struct ExportSessionParams {
+    conversation_id: ConversationId,
+}
+
+#[derive(Serialize)]
+struct ExportSessionResponse {
+    history: Vec<ResponseItem>,
+    metadata: ConversationMetadata,
+}
+
+#[derive(Deserialize)]
+struct ImportSessionParams {
+    history: Vec<ResponseItem>,
+    #[serde(default)]
+    metadata: ConversationMetadata,
+    #[serde(flatten)]
+    new_params: NewConversationParams,
+}
+
+#[derive(Serialize)]
+struct ImportSessionResponse {
+    conversation_id: ConversationId,
+    model: String,
 }
 
 async fn handle_socket(
@@ -230,6 +258,79 @@ async fn handle_socket(
                         .await;
                     send_response(sender.clone(), id, json!({})).await;
                 }
+                "exportSession" => {
+                    let params: ExportSessionParams =
+                        match req.params.and_then(|v| serde_json::from_value(v).ok()) {
+                            Some(p) => p,
+                            None => {
+                                send_invalid_request(sender.clone(), id, "missing params").await;
+                                continue;
+                            }
+                        };
+                    match conversation_manager
+                        .export_conversation(params.conversation_id.0)
+                        .await
+                    {
+                        Ok((history, metadata)) => {
+                            let resp = ExportSessionResponse { history, metadata };
+                            send_response(sender.clone(), id, resp).await;
+                        }
+                        Err(err) => {
+                            send_invalid_request(
+                                sender.clone(),
+                                id,
+                                &format!("error exporting session: {err}"),
+                            )
+                            .await;
+                        }
+                    }
+                }
+                "importSession" => {
+                    let params: ImportSessionParams =
+                        match req.params.and_then(|v| serde_json::from_value(v).ok()) {
+                            Some(p) => p,
+                            None => {
+                                send_invalid_request(sender.clone(), id, "missing params").await;
+                                continue;
+                            }
+                        };
+                    let config = match derive_config_from_params(params.new_params) {
+                        Ok(c) => c,
+                        Err(err) => {
+                            send_invalid_request(
+                                sender.clone(),
+                                id,
+                                &format!("error deriving config: {err}"),
+                            )
+                            .await;
+                            continue;
+                        }
+                    };
+                    match conversation_manager
+                        .import_conversation(params.history, config, params.metadata)
+                        .await
+                    {
+                        Ok(NewConversation {
+                            conversation_id,
+                            session_configured,
+                            ..
+                        }) => {
+                            let resp = ImportSessionResponse {
+                                conversation_id: ConversationId(conversation_id),
+                                model: session_configured.model,
+                            };
+                            send_response(sender.clone(), id, resp).await;
+                        }
+                        Err(err) => {
+                            send_invalid_request(
+                                sender.clone(),
+                                id,
+                                &format!("error importing session: {err}"),
+                            )
+                            .await;
+                        }
+                    }
+                }
                 "getConfig" => {
                     let cfg = match load_config_as_toml(&codex_home) {
                         Ok(c) => c,
@@ -298,6 +399,13 @@ async fn handle_new_conversation(
     request_id: RequestId,
     params: NewConversationParams,
 ) {
+    let metadata = ConversationMetadata {
+        workspace_path: params.cwd.clone().map(PathBuf::from),
+        custom_settings: params
+            .config
+            .clone()
+            .map(|m| serde_json::Value::Object(m.into_iter().collect())),
+    };
     let config = match derive_config_from_params(params) {
         Ok(c) => c,
         Err(err) => {
@@ -307,7 +415,10 @@ async fn handle_new_conversation(
         }
     };
 
-    match conversation_manager.new_conversation(config).await {
+    match conversation_manager
+        .new_conversation_with_metadata(config, metadata)
+        .await
+    {
         Ok(NewConversation {
             conversation_id,
             session_configured,

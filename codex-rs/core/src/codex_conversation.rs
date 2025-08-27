@@ -1,8 +1,10 @@
 use crate::codex::Codex;
 use crate::error::Result as CodexResult;
 use crate::protocol::Event;
+use crate::protocol::EventMsg;
 use crate::protocol::Op;
 use crate::protocol::Submission;
+use codex_protocol::models::ResponseItem;
 
 pub struct CodexConversation {
     codex: Codex,
@@ -26,5 +28,16 @@ impl CodexConversation {
 
     pub async fn next_event(&self) -> CodexResult<Event> {
         self.codex.next_event().await
+    }
+
+    pub async fn history(&self) -> CodexResult<Vec<ResponseItem>> {
+        let id = self.submit(Op::GetHistory).await?;
+        loop {
+            let event = self.next_event().await?;
+            if event.id == id
+                && let EventMsg::ConversationHistory(resp) = event.msg {
+                    return Ok(resp.entries);
+                }
+        }
     }
 }
