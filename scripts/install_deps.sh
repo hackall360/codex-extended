@@ -13,9 +13,14 @@ if ! command -v dart >/dev/null 2>&1; then
   sudo apt-get install -y dart
 fi
 
-# Install Flutter
+# Install Flutter without cloning the full repository
 if ! command -v flutter >/dev/null 2>&1; then
-  sudo git clone https://github.com/flutter/flutter.git -b stable /opt/flutter
-  echo 'export PATH=/opt/flutter/bin:\$PATH' | sudo tee /etc/profile.d/flutter.sh >/dev/null
+  FLUTTER_VERSION="3.35.2"
+  TMP_DIR="$(mktemp -d)"
+  wget -qO "$TMP_DIR/flutter.tar.xz" "https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/flutter_linux_${FLUTTER_VERSION}-stable.tar.xz"
+  sudo mkdir -p /opt
+  sudo tar -xf "$TMP_DIR/flutter.tar.xz" -C /opt
+  sudo rm -rf "$TMP_DIR"
+  echo 'export PATH=/opt/flutter/bin:$PATH' | sudo tee /etc/profile.d/flutter.sh >/dev/null
 fi
 
