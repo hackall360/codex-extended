@@ -3,7 +3,7 @@ set -euo pipefail
 
 # Install base packages
 sudo apt-get update
-sudo apt-get install -y curl git python3 python3-pip golang rustc cargo apt-transport-https gnupg wget
+sudo apt-get install -y curl git python3 python3-pip golang rustc cargo apt-transport-https gnupg wget xz-utils
 
 # Install Dart
 if ! command -v dart >/dev/null 2>&1; then
