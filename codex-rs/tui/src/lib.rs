@@ -122,6 +122,7 @@ pub async fn run_main(
         approval_policy,
         sandbox_mode,
         cwd,
+        edit_mode: cli.edit_mode.map(Into::into),
         model_provider: model_provider_override,
         config_profile: cli.config_profile.clone(),
         codex_linux_sandbox_exe,

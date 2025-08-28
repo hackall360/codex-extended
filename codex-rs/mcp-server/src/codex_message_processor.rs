@@ -792,6 +792,7 @@ fn derive_config_from_params(
         config_profile: profile,
         cwd: cwd.map(PathBuf::from),
         approval_policy,
+        edit_mode: None,
         sandbox_mode,
         model_provider: None,
         codex_linux_sandbox_exe,

@@ -55,8 +55,14 @@ pub struct ExecParams {
 }
 
 impl ExecParams {
-    pub fn timeout_duration(&self) -> Duration {
-        Duration::from_millis(self.timeout_ms.unwrap_or(DEFAULT_TIMEOUT_MS))
+    /// Returns Some(Duration) when a timeout should be enforced.
+    /// Returns None to indicate no timeout.
+    pub fn timeout_duration_opt(&self) -> Option<Duration> {
+        match self.timeout_ms {
+            Some(0) => None, // special-case: 0 means no timeout
+            Some(ms) => Some(Duration::from_millis(ms)),
+            None => Some(Duration::from_millis(DEFAULT_TIMEOUT_MS)),
+        }
     }
 }
 
@@ -91,7 +97,7 @@ pub async fn process_exec_tool_call(
     {
         SandboxType::None => exec(params, sandbox_policy, stdout_stream.clone()).await,
         SandboxType::MacosSeatbelt => {
-            let timeout = params.timeout_duration();
+            let timeout = params.timeout_duration_opt();
             let ExecParams {
                 command, cwd, env, ..
             } = params;
@@ -106,7 +112,7 @@ pub async fn process_exec_tool_call(
             consume_truncated_output(child, timeout, stdout_stream.clone()).await
         }
         SandboxType::LinuxSeccomp => {
-            let timeout = params.timeout_duration();
+            let timeout = params.timeout_duration_opt();
             let ExecParams {
                 command, cwd, env, ..
             } = params;
@@ -237,7 +243,7 @@ async fn exec(
     sandbox_policy: &SandboxPolicy,
     stdout_stream: Option<StdoutStream>,
 ) -> Result<RawExecToolCallOutput> {
-    let timeout = params.timeout_duration();
+    let timeout = params.timeout_duration_opt();
     let ExecParams {
         command, cwd, env, ..
     } = params;
@@ -266,7 +272,7 @@ async fn exec(
 /// use as the output of a `shell` tool call. Also enforces specified timeout.
 async fn consume_truncated_output(
     mut child: Child,
-    timeout: Duration,
+    timeout: Option<Duration>,
     stdout_stream: Option<StdoutStream>,
 ) -> Result<RawExecToolCallOutput> {
     // Both stdout and stderr were configured with `Stdio::piped()`
@@ -299,22 +305,37 @@ async fn consume_truncated_output(
         Some(agg_tx.clone()),
     ));
 
-    let exit_status = tokio::select! {
-        result = tokio::time::timeout(timeout, child.wait()) => {
-            match result {
-                Ok(Ok(exit_status)) => exit_status,
-                Ok(e) => e?,
-                Err(_) => {
-                    // timeout
-                    child.start_kill()?;
-                    // Debatable whether `child.wait().await` should be called here.
-                    synthetic_exit_status(EXIT_CODE_SIGNAL_BASE + TIMEOUT_CODE)
+    let exit_status = if let Some(timeout) = timeout {
+        tokio::select! {
+            result = tokio::time::timeout(timeout, child.wait()) => {
+                match result {
+                    Ok(Ok(exit_status)) => exit_status,
+                    Ok(e) => e?,
+                    Err(_) => {
+                        // timeout
+                        child.start_kill()?;
+                        // Debatable whether `child.wait().await` should be called here.
+                        synthetic_exit_status(EXIT_CODE_SIGNAL_BASE + TIMEOUT_CODE)
+                    }
                 }
             }
+            _ = tokio::signal::ctrl_c() => {
+                child.start_kill()?;
+                synthetic_exit_status(EXIT_CODE_SIGNAL_BASE + SIGKILL_CODE)
+            }
         }
-        _ = tokio::signal::ctrl_c() => {
-            child.start_kill()?;
-            synthetic_exit_status(EXIT_CODE_SIGNAL_BASE + SIGKILL_CODE)
+    } else {
+        tokio::select! {
+            result = child.wait() => {
+                match result {
+                    Ok(exit_status) => exit_status,
+                    Err(e) => return Err(CodexErr::Io(e)),
+                }
+            }
+            _ = tokio::signal::ctrl_c() => {
+                child.start_kill()?;
+                synthetic_exit_status(EXIT_CODE_SIGNAL_BASE + SIGKILL_CODE)
+            }
         }
     };
 

@@ -3,7 +3,7 @@ use crate::codex::TurnContext;
 use crate::protocol::FileChange;
 use crate::protocol::ReviewDecision;
 use crate::safety::SafetyCheck;
-use crate::safety::assess_patch_safety;
+use crate::safety::assess_patch_safety_with_mode;
 use codex_apply_patch::ApplyPatchAction;
 use codex_apply_patch::ApplyPatchFileChange;
 use codex_protocol::models::FunctionCallOutputPayload;
@@ -46,11 +46,12 @@ pub(crate) async fn apply_patch(
     call_id: &str,
     action: ApplyPatchAction,
 ) -> InternalApplyPatchInvocation {
-    match assess_patch_safety(
+    match assess_patch_safety_with_mode(
         &action,
         turn_context.approval_policy,
         &turn_context.sandbox_policy,
         &turn_context.cwd,
+        turn_context.edit_mode,
     ) {
         SafetyCheck::AutoApprove { .. } => {
             InternalApplyPatchInvocation::DelegateToExec(ApplyPatchExec {

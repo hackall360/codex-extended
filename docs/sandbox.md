@@ -23,6 +23,19 @@ If you need Codex to read files, make edits, and run commands with network acces
 
 Yes, you can disable all approval prompts with `--ask-for-approval never`. This option works with all `--sandbox` modes, so you still have full control over Codex's level of autonomy. It will make its best attempt with whatever contrainsts you provide.
 
+### Edit mode (authorization)
+
+In addition to approval policy, Codex exposes an edit authorization mode that controls whether file edits and mutating commands are allowed and whether they require user confirmation:
+
+- `--edit-mode request` (default): ask as normal
+- `--edit-mode block`: disallow edits and mutating commands
+- `--edit-mode trusted`: auto-approve edits and commands (no prompts)
+
+Safety guidance for `trusted`:
+- Strongly prefer running inside a VM or container.
+- Consider pairing with `--sandbox workspace-write` for guardrails. If you need `--sandbox danger-full-access`, do so only inside an isolated environment.
+- For long-running tasks, adjust or disable host command timeouts via config (`command_timeout_ms = 120000` or `"none"`).
+
 ### Common sandbox + approvals combinations
 
 | Intent                                  | Flags                                                                                  | Effect                                                                                  |

@@ -92,6 +92,26 @@ codex --sandbox danger-full-access
 
 The same setting can be persisted in `~/.codex/config.toml` via the top-level `sandbox_mode = "MODE"` key, e.g. `sandbox_mode = "workspace-write"`.
 
+### Edit authorization via `--edit-mode`
+
+Control when Codex edits files or runs mutating commands:
+
+```shell
+# Default: ask as normal
+codex --edit-mode request
+
+# Disallow edits and mutating commands
+codex --edit-mode block
+
+# Fully autonomous (no prompts)
+codex --edit-mode trusted
+```
+
+Safety guidance for `trusted`:
+- Prefer running in a VM or container.
+- Consider pairing with `--sandbox workspace-write` for guardrails. If you need `--sandbox danger-full-access`, only do so inside an isolated environment.
+- Control host command timeouts via `-c command_timeout_ms=120000` or disable with `-c command_timeout_ms=\"none\"`.
+
 ## Code Organization
 
 This folder is the root of a Cargo workspace. It contains quite a bit of experimental code, but here are the key crates:

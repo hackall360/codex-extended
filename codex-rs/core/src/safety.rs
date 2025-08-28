@@ -6,6 +6,7 @@ use std::path::PathBuf;
 use codex_apply_patch::ApplyPatchAction;
 use codex_apply_patch::ApplyPatchFileChange;
 
+use crate::config_types::EditMode;
 use crate::exec::SandboxType;
 use crate::is_safe_command::is_known_safe_command;
 use crate::protocol::AskForApproval;
@@ -24,10 +25,35 @@ pub fn assess_patch_safety(
     sandbox_policy: &SandboxPolicy,
     cwd: &Path,
 ) -> SafetyCheck {
+    assess_patch_safety_with_mode(action, policy, sandbox_policy, cwd, EditMode::Request)
+}
+
+pub fn assess_patch_safety_with_mode(
+    action: &ApplyPatchAction,
+    policy: AskForApproval,
+    sandbox_policy: &SandboxPolicy,
+    cwd: &Path,
+    edit_mode: EditMode,
+) -> SafetyCheck {
     if action.is_empty() {
         return SafetyCheck::Reject {
             reason: "empty patch".to_string(),
         };
+    }
+
+    match edit_mode {
+        EditMode::Block => {
+            return SafetyCheck::Reject {
+                reason: "edits are blocked by edit_mode".to_string(),
+            };
+        }
+        EditMode::Trusted => {
+            // Auto-approve without sandbox to avoid any prompt/escalation.
+            return SafetyCheck::AutoApprove {
+                sandbox_type: SandboxType::None,
+            };
+        }
+        EditMode::Request => {}
     }
 
     match policy {
@@ -78,6 +104,24 @@ pub fn assess_command_safety(
     approved: &HashSet<Vec<String>>,
     with_escalated_permissions: bool,
 ) -> SafetyCheck {
+    assess_command_safety_with_mode(
+        command,
+        approval_policy,
+        sandbox_policy,
+        approved,
+        with_escalated_permissions,
+        EditMode::Request,
+    )
+}
+
+pub fn assess_command_safety_with_mode(
+    command: &[String],
+    approval_policy: AskForApproval,
+    sandbox_policy: &SandboxPolicy,
+    approved: &HashSet<Vec<String>>,
+    with_escalated_permissions: bool,
+    edit_mode: EditMode,
+) -> SafetyCheck {
     // A command is "trusted" because either:
     // - it belongs to a set of commands we consider "safe" by default, or
     // - the user has explicitly approved the command for this session
@@ -95,6 +139,22 @@ pub fn assess_command_safety(
         return SafetyCheck::AutoApprove {
             sandbox_type: SandboxType::None,
         };
+    }
+
+    match edit_mode {
+        EditMode::Block => {
+            // Only allow known-safe commands in block mode; reject others.
+            return SafetyCheck::Reject {
+                reason: "mutating commands are blocked by edit_mode".to_string(),
+            };
+        }
+        EditMode::Trusted => {
+            // Auto-approve without sandbox and without prompting.
+            return SafetyCheck::AutoApprove {
+                sandbox_type: SandboxType::None,
+            };
+        }
+        EditMode::Request => {}
     }
 
     assess_safety_for_untrusted_command(approval_policy, sandbox_policy, with_escalated_permissions)

@@ -8,7 +8,7 @@
 | `codex "..."`      | Initial prompt for interactive TUI | `codex "fix lint errors"`       |
 | `codex exec "..."` | Non-interactive "automation mode"  | `codex exec "explain utils.ts"` |
 
-Key flags: `--model/-m`, `--ask-for-approval/-a`.
+Key flags: `--model/-m`, `--ask-for-approval/-a`, `--edit-mode`.
 
 ### Running with a prompt as input
 
@@ -84,3 +84,21 @@ codex completion fish
 #### `--cd`/`-C` flag
 
 Sometimes it is not convenient to `cd` to the directory you want Codex to use as the "working root" before running Codex. Fortunately, `codex` supports a `--cd` option so you can specify whatever folder you want. You can confirm that Codex is honoring `--cd` by double-checking the **workdir** it reports in the TUI at the start of a new session.
+
+---
+### Autonomous mode (no prompts)
+
+To run Codex without interactive approvals beyond your initial and subsequent prompts, set the edit authorization mode to `trusted`:
+
+```bash
+# Interactive TUI, fully autonomous
+codex --edit-mode trusted --sandbox workspace-write "build, test, and fix failures"
+
+# Non-interactive (automation/CI)
+codex exec --edit-mode trusted "update CHANGELOG and open a PR"
+```
+
+Important safety guidance:
+- Use a VM or container when running with `--edit-mode trusted`.
+- Consider an explicit sandbox policy (e.g., `--sandbox workspace-write`). If you must use `--sandbox danger-full-access`, do so only inside an isolated VM/container.
+- For long-running commands, you can disable host command timeouts via `-c command_timeout_ms=\"none\"` or set a higher millisecond value.

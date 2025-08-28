@@ -122,6 +122,19 @@ Number of times Codex will attempt to reconnect when a streaming response is int
 
 How long Codex will wait for activity on a streaming response before treating the connection as lost. Defaults to `300_000` (5 minutes).
 
+#### Global provider defaults
+
+You can optionally set these same keys at the top level of `config.toml` to establish global defaults that apply to the currently selected provider:
+
+```toml
+# Applied to whichever provider is selected
+request_max_retries = 4
+stream_max_retries = 10
+stream_idle_timeout_ms = 300000
+```
+
+Per-provider settings, when present, take precedence over the global defaults.
+
 ## model_provider
 
 Identifies which provider to use from the `model_providers` map. Defaults to `"openai"`. You can override the `base_url` for the built-in `openai` provider via the `OPENAI_BASE_URL` environment variable.
@@ -171,6 +184,44 @@ Alternatively, you can have the model run until it is done, and never ask to run
 # something out. Note the `exec` subcommand always uses this mode.
 approval_policy = "never"
 ```
+
+## edit_mode
+
+Controls when Codex is allowed to edit files or run mutating commands. This is separate from `approval_policy` and focuses on authorization for edits/commands themselves.
+
+```toml
+# request (default): ask before edits/commands as normal
+edit_mode = "request"
+
+# block: disallow edits and mutating commands entirely
+edit_mode = "block"
+
+# trusted: auto-approve edits and commands (no interactive prompts)
+# Danger: combine with an isolated environment (VM/Container).
+edit_mode = "trusted"
+```
+
+- `request`: Preserves current behavior; Codex requests approval based on your `approval_policy` and sandbox settings.
+- `block`: Rejects file patches and mutating/unknown commands. Useful for read-only review/explanation sessions.
+- `trusted`: Auto-approves edits and commands — no user confirmation. Use only in a disposable VM or locked-down container. Pair with an appropriate `sandbox_mode` if you still want OS-level restrictions.
+
+CLI flag (TUI and exec): `--edit-mode {request|block|trusted}`.
+
+## command_timeout_ms
+
+Sets the default timeout for host shell commands invoked by Codex. Individual tool calls can still override per-command timeouts.
+
+```toml
+# Milliseconds
+command_timeout_ms = 120000
+
+# Disable timeouts entirely
+command_timeout_ms = "none"
+```
+
+Notes:
+- When a tool call does not specify a timeout, this value is injected by default.
+- Use `"none"` carefully — long-running processes may hang a session.
 
 ## profiles
 
@@ -573,6 +624,7 @@ Options that are specific to the TUI.
 | `model_context_window` | number | Context window tokens. |
 | `model_max_output_tokens` | number | Max output tokens. |
 | `approval_policy` | `untrusted` | `on-failure` | `on-request` | `never` | When to prompt for approval. |
+| `edit_mode` | `request` | `block` | `trusted` | Edit/command authorization mode. |
 | `sandbox_mode` | `read-only` | `workspace-write` | `danger-full-access` | OS sandbox policy. |
 | `sandbox_workspace_write.writable_roots` | array<string> | Extra writable roots in workspace‑write. |
 | `sandbox_workspace_write.network_access` | boolean | Allow network in workspace‑write (default: false). |
@@ -594,7 +646,11 @@ Options that are specific to the TUI.
 | `model_providers.<id>.request_max_retries` | number | Per‑provider HTTP retry count (default: 4). |
 | `model_providers.<id>.stream_max_retries` | number | SSE stream retry count (default: 5). |
 | `model_providers.<id>.stream_idle_timeout_ms` | number | SSE idle timeout (ms) (default: 300000). |
+| `request_max_retries` | number | Global default HTTP retry count applied to selected provider. |
+| `stream_max_retries` | number | Global default SSE stream retry count applied to selected provider. |
+| `stream_idle_timeout_ms` | number | Global default SSE idle timeout (ms) applied to selected provider. |
 | `project_doc_max_bytes` | number | Max bytes to read from `AGENTS.md`. |
+| `command_timeout_ms` | number or `"none"` | Default host command timeout in ms or disable with `"none"`. |
 | `profile` | string | Active profile name. |
 | `profiles.<name>.*` | various | Profile‑scoped overrides of the same keys. |
 | `history.persistence` | `save-all` | `none` | History file persistence (default: `save-all`). |

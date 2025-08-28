@@ -97,6 +97,10 @@ impl ModelClient {
             .or_else(|| get_model_info(&self.config.model_family).map(|info| info.context_window))
     }
 
+    pub fn get_config(&self) -> Arc<Config> {
+        Arc::clone(&self.config)
+    }
+
     /// Dispatches to either the Responses or Chat implementation depending on
     /// the provider config.  Public callers always invoke `stream()` – the
     /// specialised helpers are private to avoid accidental misuse.

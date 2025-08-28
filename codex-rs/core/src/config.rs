@@ -1,4 +1,6 @@
 use crate::config_profile::ConfigProfile;
+use crate::config_types::CommandTimeoutMs;
+use crate::config_types::EditMode;
 use crate::config_types::History;
 use crate::config_types::McpServerConfig;
 use crate::config_types::SandboxWorkspaceWrite;
@@ -181,6 +183,15 @@ pub struct Config {
 
     /// Include the `view_image` tool that lets the agent attach a local image path to context.
     pub include_view_image_tool: bool,
+
+    /// Controls how Codex handles edits (file changes and mutating commands).
+    pub edit_mode: EditMode,
+
+    /// Default timeout for exec commands. When `Some(Millis(ms))`, commands
+    /// time out after the specified duration unless overridden per-call. When
+    /// `Some(None)`, commands have no timeout by default. When `None`, a
+    /// built-in default is used.
+    pub command_timeout_ms: Option<CommandTimeoutMs>,
 }
 
 impl Config {
@@ -401,6 +412,9 @@ pub struct ConfigToml {
     /// Default approval policy for executing commands.
     pub approval_policy: Option<AskForApproval>,
 
+    /// Controls how Codex handles edits (file changes and mutating commands).
+    pub edit_mode: Option<EditMode>,
+
     #[serde(default)]
     pub shell_environment_policy: ShellEnvironmentPolicyToml,
 
@@ -458,6 +472,15 @@ pub struct ConfigToml {
     /// When set to `true`, `AgentReasoningRawContentEvent` events will be shown in the UI/output.
     /// Defaults to `false`.
     pub show_raw_agent_reasoning: Option<bool>,
+
+    /// Global overrides for the default model provider behaviour.
+    pub request_max_retries: Option<u64>,
+    pub stream_max_retries: Option<u64>,
+    pub stream_idle_timeout_ms: Option<u64>,
+
+    /// Default timeout for shell commands (milliseconds) or the string
+    /// "none" to disable timeouts.
+    pub command_timeout_ms: Option<CommandTimeoutMs>,
 
     pub model_reasoning_effort: Option<ReasoningEffort>,
     pub model_reasoning_summary: Option<ReasoningSummary>,
@@ -586,6 +609,7 @@ pub struct ConfigOverrides {
     pub model: Option<String>,
     pub cwd: Option<PathBuf>,
     pub approval_policy: Option<AskForApproval>,
+    pub edit_mode: Option<EditMode>,
     pub sandbox_mode: Option<SandboxMode>,
     pub model_provider: Option<String>,
     pub config_profile: Option<String>,
@@ -614,6 +638,7 @@ impl Config {
             model,
             cwd,
             approval_policy,
+            edit_mode,
             sandbox_mode,
             model_provider,
             config_profile: config_profile_key,
@@ -653,7 +678,7 @@ impl Config {
             .or(config_profile.model_provider)
             .or(cfg.model_provider)
             .unwrap_or_else(|| "openai".to_string());
-        let model_provider = model_providers
+        let mut model_provider = model_providers
             .get(&model_provider_id)
             .ok_or_else(|| {
                 std::io::Error::new(
@@ -662,6 +687,17 @@ impl Config {
                 )
             })?
             .clone();
+
+        // Apply top-level provider tuning if present.
+        if let Some(v) = cfg.request_max_retries {
+            model_provider.request_max_retries = Some(v);
+        }
+        if let Some(v) = cfg.stream_max_retries {
+            model_provider.stream_max_retries = Some(v);
+        }
+        if let Some(v) = cfg.stream_idle_timeout_ms {
+            model_provider.stream_idle_timeout_ms = Some(v);
+        }
 
         let shell_environment_policy = cfg.shell_environment_policy.clone().into();
 
@@ -798,6 +834,8 @@ impl Config {
                 .experimental_use_exec_command_tool
                 .unwrap_or(false),
             include_view_image_tool,
+            edit_mode: edit_mode.or(cfg.edit_mode).unwrap_or_default(),
+            command_timeout_ms: cfg.command_timeout_ms,
         };
         Ok(config)
     }
@@ -1167,6 +1205,8 @@ disable_response_storage = true
                 preferred_auth_method: AuthMode::ChatGPT,
                 use_experimental_streamable_shell_tool: false,
                 include_view_image_tool: true,
+                edit_mode: EditMode::default(),
+                command_timeout_ms: None,
             },
             o3_profile_config
         );
@@ -1224,6 +1264,8 @@ disable_response_storage = true
             preferred_auth_method: AuthMode::ChatGPT,
             use_experimental_streamable_shell_tool: false,
             include_view_image_tool: true,
+            edit_mode: EditMode::default(),
+            command_timeout_ms: None,
         };
 
         assert_eq!(expected_gpt3_profile_config, gpt3_profile_config);
@@ -1296,6 +1338,8 @@ disable_response_storage = true
             preferred_auth_method: AuthMode::ChatGPT,
             use_experimental_streamable_shell_tool: false,
             include_view_image_tool: true,
+            edit_mode: EditMode::default(),
+            command_timeout_ms: None,
         };
 
         assert_eq!(expected_zdr_profile_config, zdr_profile_config);

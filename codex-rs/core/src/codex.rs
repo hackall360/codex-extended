@@ -41,6 +41,8 @@ use crate::client::ModelClient;
 use crate::client_common::Prompt;
 use crate::client_common::ResponseEvent;
 use crate::config::Config;
+use crate::config_types::CommandTimeoutMs;
+use crate::config_types::EditMode;
 use crate::config_types::ShellEnvironmentPolicy;
 use crate::conversation_history::ConversationHistory;
 use crate::environment_context::EnvironmentContext;
@@ -102,7 +104,7 @@ use crate::protocol::TurnDiffEvent;
 use crate::protocol::WebSearchBeginEvent;
 use crate::rollout::RolloutRecorder;
 use crate::safety::SafetyCheck;
-use crate::safety::assess_command_safety;
+use crate::safety::assess_command_safety_with_mode;
 use crate::safety::assess_safety_for_untrusted_command;
 use crate::shell;
 use crate::turn_diff_tracker::TurnDiffTracker;
@@ -297,6 +299,7 @@ pub(crate) struct TurnContext {
     pub(crate) base_instructions: Option<String>,
     pub(crate) user_instructions: Option<String>,
     pub(crate) approval_policy: AskForApproval,
+    pub(crate) edit_mode: EditMode,
     pub(crate) sandbox_policy: SandboxPolicy,
     pub(crate) shell_environment_policy: ShellEnvironmentPolicy,
     pub(crate) disable_response_storage: bool,
@@ -523,6 +526,7 @@ impl Session {
             user_instructions,
             base_instructions,
             approval_policy,
+            edit_mode: config.edit_mode,
             sandbox_policy,
             shell_environment_policy: config.shell_environment_policy.clone(),
             cwd,
@@ -1118,6 +1122,7 @@ async fn submission_loop(
                     user_instructions: prev.user_instructions.clone(),
                     base_instructions: prev.base_instructions.clone(),
                     approval_policy: new_approval_policy,
+                    edit_mode: prev.edit_mode,
                     sandbox_policy: new_sandbox_policy.clone(),
                     shell_environment_policy: prev.shell_environment_policy.clone(),
                     cwd: new_cwd.clone(),
@@ -1200,6 +1205,7 @@ async fn submission_loop(
                         user_instructions: turn_context.user_instructions.clone(),
                         base_instructions: turn_context.base_instructions.clone(),
                         approval_policy,
+                        edit_mode: turn_context.edit_mode,
                         sandbox_policy,
                         shell_environment_policy: turn_context.shell_environment_policy.clone(),
                         cwd,
@@ -2268,14 +2274,17 @@ async fn handle_custom_tool_call(
 }
 
 fn to_exec_params(params: ShellToolCallParams, turn_context: &TurnContext) -> ExecParams {
-    ExecParams {
-        command: params.command,
-        cwd: turn_context.resolve_path(params.workdir.clone()),
-        timeout_ms: params.timeout_ms,
-        env: create_env(&turn_context.shell_environment_policy),
-        with_escalated_permissions: params.with_escalated_permissions,
-        justification: params.justification,
-    }
+    with_default_timeout(
+        ExecParams {
+            command: params.command,
+            cwd: turn_context.resolve_path(params.workdir.clone()),
+            timeout_ms: params.timeout_ms,
+            env: create_env(&turn_context.shell_environment_policy),
+            with_escalated_permissions: params.with_escalated_permissions,
+            justification: params.justification,
+        },
+        turn_context,
+    )
 }
 
 fn parse_container_exec_arguments(
@@ -2334,6 +2343,8 @@ async fn handle_container_exec_with_params(
     sub_id: String,
     call_id: String,
 ) -> ResponseInputItem {
+    // Apply default timeout from config if not set on params.
+    let params = with_default_timeout(params, turn_context);
     // check if this was a patch, and apply it if so
     let apply_patch_exec = match maybe_parse_apply_patch_verified(&params.command, &params.cwd) {
         MaybeApplyPatchVerified::Body(changes) => {
@@ -2413,12 +2424,13 @@ async fn handle_container_exec_with_params(
         None => {
             let safety = {
                 let state = sess.state.lock_unchecked();
-                assess_command_safety(
+                assess_command_safety_with_mode(
                     &params.command,
                     turn_context.approval_policy,
                     &turn_context.sandbox_policy,
                     &state.approved_commands,
                     params.with_escalated_permissions.unwrap_or(false),
+                    turn_context.edit_mode,
                 )
             };
             let command_for_display = params.command.clone();
@@ -2545,6 +2557,19 @@ async fn handle_container_exec_with_params(
     }
 }
 
+fn with_default_timeout(mut params: ExecParams, turn_context: &TurnContext) -> ExecParams {
+    if params.timeout_ms.is_none() {
+        let cfg = turn_context.client.get_config();
+        if let Some(ct) = &cfg.command_timeout_ms {
+            params.timeout_ms = match ct {
+                CommandTimeoutMs::Millis(ms) => Some(*ms),
+                CommandTimeoutMs::None => Some(0),
+            };
+        }
+    }
+    params
+}
+
 async fn handle_sandbox_error(
     turn_diff_tracker: &mut TurnDiffTracker,
     params: ExecParams,
@@ -2580,10 +2605,11 @@ async fn handle_sandbox_error(
         return ResponseInputItem::FunctionCallOutput {
             call_id,
             output: FunctionCallOutputPayload {
-                content: format!(
-                    "command timed out after {} milliseconds",
-                    params.timeout_duration().as_millis()
-                ),
+                content: match params.timeout_ms {
+                    Some(0) => "command timed out".to_string(),
+                    Some(ms) => format!("command timed out after {ms} milliseconds"),
+                    None => "command timed out".to_string(),
+                },
                 success: Some(false),
             },
         };

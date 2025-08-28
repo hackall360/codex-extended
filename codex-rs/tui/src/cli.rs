@@ -1,6 +1,7 @@
 use clap::Parser;
 use codex_common::ApprovalModeCliArg;
 use codex_common::CliConfigOverrides;
+use codex_common::EditModeCliArg;
 use std::path::PathBuf;
 
 #[derive(Parser, Debug)]
@@ -35,6 +36,11 @@ pub struct Cli {
     /// Configure when the model requires human approval before executing a command.
     #[arg(long = "ask-for-approval", short = 'a')]
     pub approval_policy: Option<ApprovalModeCliArg>,
+
+    /// Control how Codex handles edits (file changes and mutating commands).
+    /// request: act normally; block: forbid edits; trusted: auto-approve edits.
+    #[arg(long = "edit-mode")]
+    pub edit_mode: Option<EditModeCliArg>,
 
     /// Convenience alias for low-friction sandboxed automatic execution (-a on-failure, --sandbox workspace-write).
     #[arg(long = "full-auto", default_value_t = false)]

@@ -42,6 +42,23 @@ Each archive contains a single entry with the platform baked into the name (e.g.
 
 </details>
 
+### Autonomous mode (no prompts)
+
+To let Codex run fully autonomously (no approval prompts) beyond your initial and subsequent prompts, set the edit authorization mode to trusted and choose an appropriate sandbox policy:
+
+```bash
+# Interactive TUI
+codex --edit-mode trusted --sandbox workspace-write "build, test, and fix failures"
+
+# Non-interactive
+codex exec --edit-mode trusted "update CHANGELOG and open a PR"
+```
+
+Safety guidance:
+- Prefer running in a VM or container when using `--edit-mode trusted`.
+- Pair with `--sandbox workspace-write` for guardrails. If you need `--sandbox danger-full-access`, only do so inside an isolated environment.
+- You can control command timeouts via `-c command_timeout_ms=120000` or disable with `-c command_timeout_ms=\"none\"`.
+
 ### Using Codex with your ChatGPT plan
 
 <p align="center">

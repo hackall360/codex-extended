@@ -225,3 +225,72 @@ pub enum Verbosity {
     Medium,
     High,
 }
+
+/// Controls how Codex handles edits (file changes and mutating commands).
+#[derive(Deserialize, Debug, Copy, Clone, PartialEq, Eq, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum EditMode {
+    /// Default behaviour: ask as normal according to other approval settings.
+    #[default]
+    Request,
+    /// Do not allow Codex to make changes (reject patches and mutating commands).
+    Block,
+    /// Trust Codex to make changes without prompting (auto-approve edits).
+    Trusted,
+}
+
+/// Supports specifying a default command timeout in milliseconds or disabling
+/// the timeout entirely with the value "none".
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum CommandTimeoutMs {
+    Millis(u64),
+    None,
+}
+
+impl<'de> Deserialize<'de> for CommandTimeoutMs {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        struct V;
+        impl<'de> serde::de::Visitor<'de> for V {
+            type Value = CommandTimeoutMs;
+
+            fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+                f.write_str("an integer (milliseconds) or the string 'none'")
+            }
+
+            fn visit_u64<E>(self, v: u64) -> Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                Ok(CommandTimeoutMs::Millis(v))
+            }
+
+            fn visit_i64<E>(self, v: i64) -> Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                if v < 0 {
+                    return Err(E::custom("timeout must be non-negative"));
+                }
+                Ok(CommandTimeoutMs::Millis(v as u64))
+            }
+
+            fn visit_str<E>(self, s: &str) -> Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                if s.eq_ignore_ascii_case("none") {
+                    Ok(CommandTimeoutMs::None)
+                } else {
+                    s.parse::<u64>()
+                        .map(CommandTimeoutMs::Millis)
+                        .map_err(|_| E::custom("expected integer milliseconds or 'none'"))
+                }
+            }
+        }
+
+        deserializer.deserialize_any(V)
+    }
+}

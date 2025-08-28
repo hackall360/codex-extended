@@ -9,7 +9,9 @@ Run Codex head-less in pipelines. Example GitHub Action step:
   run: |
     npm install -g @openai/codex
     export OPENAI_API_KEY="${{ secrets.OPENAI_KEY }}"
-    codex exec --full-auto "update CHANGELOG for next release"
+    codex exec --edit-mode trusted --sandbox workspace-write "update CHANGELOG for next release"
+    # For long-running jobs you can control timeouts via config, e.g.:
+    # codex exec -c command_timeout_ms=300000 --edit-mode trusted "..."
 ```
 
 ## Tracing / verbose logging
