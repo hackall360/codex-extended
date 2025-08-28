@@ -114,6 +114,14 @@ pub(crate) struct ChatWidget {
     last_history_was_exec: bool,
     // User messages queued while a turn is in progress
     queued_user_messages: VecDeque<UserMessage>,
+
+    // Auto-compact configuration/state
+    auto_compact_enabled: bool,
+    auto_compact_trigger_percent: u8,
+    auto_compact_reduction_step_percent: u8,
+    auto_compact_tolerance_percent: u8,
+    auto_compact_in_progress: bool,
+    auto_compact_baseline_initial_prompt_tokens: Option<u64>,
 }
 
 struct UserMessage {
@@ -229,8 +237,11 @@ impl ChatWidget {
         self.running_commands.clear();
         self.request_redraw();
 
-        // If there is a queued user message, send exactly one now to begin the next turn.
-        self.maybe_send_next_queued_input();
+        // Before sending any queued user message, consider auto-compaction.
+        if !self.maybe_auto_compact_after_turn() {
+            // If there is a queued user message, send exactly one now to begin the next turn.
+            self.maybe_send_next_queued_input();
+        }
     }
 
     fn on_token_count(&mut self, token_usage: TokenUsage) {
@@ -241,6 +252,13 @@ impl ChatWidget {
             self.last_token_usage.clone(),
             self.config.model_context_window,
         );
+
+        // Capture baseline used tokens the first time to normalize remaining%.
+        if self.auto_compact_baseline_initial_prompt_tokens.is_none()
+            && let Some(cached) = self.last_token_usage.cached_input_tokens
+        {
+            self.auto_compact_baseline_initial_prompt_tokens = Some(cached);
+        }
     }
 
     /// Finalize any active exec as failed, push an error message into history,
@@ -594,6 +612,22 @@ impl ChatWidget {
         let placeholder = EXAMPLE_PROMPTS[rng.random_range(0..EXAMPLE_PROMPTS.len())].to_string();
         let codex_op_tx = spawn_agent(config.clone(), app_event_tx.clone(), conversation_manager);
 
+        // Pull auto-compact preferences from config.tui (with defaults).
+        let tui_cfg = &config.tui;
+        let auto_compact_enabled = tui_cfg.auto_compact_enabled.unwrap_or(false);
+        let auto_compact_trigger_percent = tui_cfg
+            .auto_compact_start_percent
+            .unwrap_or(60)
+            .clamp(0, 100);
+        let auto_compact_reduction_step_percent = tui_cfg
+            .auto_compact_reduction_step_percent
+            .unwrap_or(5)
+            .clamp(1, 100);
+        let auto_compact_tolerance_percent = tui_cfg
+            .auto_compact_tolerance_percent
+            .unwrap_or(8)
+            .clamp(0, 100);
+
         Self {
             app_event_tx: app_event_tx.clone(),
             frame_requester: frame_requester.clone(),
@@ -624,6 +658,12 @@ impl ChatWidget {
             last_history_was_exec: false,
             queued_user_messages: VecDeque::new(),
             show_welcome_banner: true,
+            auto_compact_enabled,
+            auto_compact_trigger_percent,
+            auto_compact_reduction_step_percent,
+            auto_compact_tolerance_percent,
+            auto_compact_in_progress: false,
+            auto_compact_baseline_initial_prompt_tokens: None,
         }
     }
 
@@ -641,6 +681,22 @@ impl ChatWidget {
 
         let codex_op_tx =
             spawn_agent_from_existing(conversation, session_configured, app_event_tx.clone());
+
+        // Pull auto-compact preferences from config.tui (with defaults).
+        let tui_cfg = &config.tui;
+        let auto_compact_enabled = tui_cfg.auto_compact_enabled.unwrap_or(false);
+        let auto_compact_trigger_percent = tui_cfg
+            .auto_compact_start_percent
+            .unwrap_or(60)
+            .clamp(0, 100);
+        let auto_compact_reduction_step_percent = tui_cfg
+            .auto_compact_reduction_step_percent
+            .unwrap_or(5)
+            .clamp(1, 100);
+        let auto_compact_tolerance_percent = tui_cfg
+            .auto_compact_tolerance_percent
+            .unwrap_or(8)
+            .clamp(0, 100);
 
         Self {
             app_event_tx: app_event_tx.clone(),
@@ -669,6 +725,12 @@ impl ChatWidget {
             last_history_was_exec: false,
             queued_user_messages: VecDeque::new(),
             show_welcome_banner: false,
+            auto_compact_enabled,
+            auto_compact_trigger_percent,
+            auto_compact_reduction_step_percent,
+            auto_compact_tolerance_percent,
+            auto_compact_in_progress: false,
+            auto_compact_baseline_initial_prompt_tokens: None,
         }
     }
 
@@ -761,8 +823,7 @@ impl ChatWidget {
                 self.submit_text_message(INIT_PROMPT.to_string());
             }
             SlashCommand::Compact => {
-                self.clear_token_usage();
-                self.app_event_tx.send(AppEvent::CodexOp(Op::Compact));
+                self.trigger_compact(false);
             }
             SlashCommand::Model => {
                 self.open_model_popup();
@@ -1223,6 +1284,72 @@ impl ChatWidget {
             self.last_token_usage.clone(),
             self.config.model_context_window,
         );
+    }
+
+    // --- Auto-compact helpers ---
+
+    const AUTO_COMPACT_FINAL_TARGET: u8 = 40; // 40% remaining
+    const AUTO_COMPACT_FINAL_UPPER: u8 = 45; // treat [40,45]% as "close enough"
+
+    fn trigger_compact(&mut self, is_auto: bool) {
+        self.clear_token_usage();
+        if is_auto {
+            self.auto_compact_in_progress = true;
+        }
+        self.app_event_tx.send(AppEvent::CodexOp(Op::Compact));
+    }
+
+    fn percent_remaining_for_auto_compact(&self) -> Option<u8> {
+        let context_window = self.config.model_context_window?;
+        let baseline = self
+            .auto_compact_baseline_initial_prompt_tokens
+            .unwrap_or_else(|| self.last_token_usage.cached_input_tokens.unwrap_or(0));
+        Some(
+            self.last_token_usage
+                .percent_of_context_window_remaining(context_window, baseline),
+        )
+    }
+
+    /// Returns true if an auto-compaction was triggered for the just-completed turn.
+    fn maybe_auto_compact_after_turn(&mut self) -> bool {
+        if !self.auto_compact_enabled {
+            return false;
+        }
+
+        // If an auto-compaction just finished, evaluate its effectiveness and
+        // adjust the trigger threshold accordingly.
+        if self.auto_compact_in_progress {
+            if let Some(percent) = self.percent_remaining_for_auto_compact() {
+                if (Self::AUTO_COMPACT_FINAL_TARGET..=Self::AUTO_COMPACT_FINAL_UPPER)
+                    .contains(&percent)
+                {
+                    // Good �? lock to the final target.
+                    self.auto_compact_trigger_percent = Self::AUTO_COMPACT_FINAL_TARGET;
+                } else {
+                    let lower = self.auto_compact_trigger_percent;
+                    let upper = lower.saturating_add(self.auto_compact_tolerance_percent);
+                    if percent >= lower && percent <= upper {
+                        // Compaction did not free much context; lower trigger.
+                        let reduced = self
+                            .auto_compact_trigger_percent
+                            .saturating_sub(self.auto_compact_reduction_step_percent);
+                        self.auto_compact_trigger_percent =
+                            reduced.max(Self::AUTO_COMPACT_FINAL_TARGET);
+                    }
+                }
+            }
+            self.auto_compact_in_progress = false;
+        }
+
+        // Trigger compaction if remaining% is at or below our current trigger.
+        if let Some(percent) = self.percent_remaining_for_auto_compact()
+            && percent <= self.auto_compact_trigger_percent
+        {
+            self.trigger_compact(true);
+            return true;
+        }
+
+        false
     }
 
     pub fn cursor_pos(&self, area: Rect) -> Option<(u16, u16)> {

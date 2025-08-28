@@ -186,6 +186,12 @@ fn make_chatwidget_manual() -> (
         show_welcome_banner: true,
         last_history_was_exec: false,
         queued_user_messages: std::collections::VecDeque::new(),
+        auto_compact_enabled: false,
+        auto_compact_trigger_percent: 60,
+        auto_compact_reduction_step_percent: 5,
+        auto_compact_tolerance_percent: 8,
+        auto_compact_in_progress: false,
+        auto_compact_baseline_initial_prompt_tokens: None,
     };
     (widget, rx, op_rx)
 }

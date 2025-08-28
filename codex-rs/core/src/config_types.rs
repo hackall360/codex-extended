@@ -76,7 +76,31 @@ pub enum HistoryPersistence {
 
 /// Collection of settings that are specific to the TUI.
 #[derive(Deserialize, Debug, Clone, PartialEq, Default)]
-pub struct Tui {}
+pub struct Tui {
+    /// Enable automatic compaction when the remaining context percentage
+    /// falls at or below the configured threshold. When `None`, defaults to
+    /// `false`.
+    #[serde(default)]
+    pub auto_compact_enabled: Option<bool>,
+
+    /// Initial percentage (0-100) of remaining context at which auto-compaction
+    /// will trigger. Defaults to 60 when not specified.
+    #[serde(default)]
+    pub auto_compact_start_percent: Option<u8>,
+
+    /// Reduction step in percentage points (e.g., 5) used to lower the trigger
+    /// threshold if compaction does not sufficiently reduce the context window.
+    /// Defaults to 5 when not specified.
+    #[serde(default)]
+    pub auto_compact_reduction_step_percent: Option<u8>,
+
+    /// Tolerance band in percentage points added above the current trigger to
+    /// decide when to reduce the threshold (e.g., with start=60 and tolerance=8,
+    /// a post-compaction result in [60,68] will lower the trigger by the
+    /// reduction step). Defaults to 8 when not specified.
+    #[serde(default)]
+    pub auto_compact_tolerance_percent: Option<u8>,
+}
 
 #[derive(Deserialize, Debug, Clone, PartialEq, Default)]
 pub struct SandboxWorkspaceWrite {

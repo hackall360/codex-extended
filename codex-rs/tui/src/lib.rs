@@ -240,6 +240,20 @@ async fn run_ratatui_app(
     let mut config = config;
     color_eyre::install()?;
 
+    // Apply TUI-specific CLI overrides for auto-compaction behavior.
+    if let Some(enabled) = cli.auto_compact {
+        config.tui.auto_compact_enabled = Some(enabled);
+    }
+    if let Some(p) = cli.auto_compact_start {
+        config.tui.auto_compact_start_percent = Some(p);
+    }
+    if let Some(p) = cli.auto_compact_reduction {
+        config.tui.auto_compact_reduction_step_percent = Some(p);
+    }
+    if let Some(p) = cli.auto_compact_tolerance {
+        config.tui.auto_compact_tolerance_percent = Some(p);
+    }
+
     // Forward panic reports through tracing so they appear in the UI status
     // line, but do not swallow the default/color-eyre panic handler.
     // Chain to the previous hook so users still get a rich panic report

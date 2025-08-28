@@ -66,4 +66,23 @@ pub struct Cli {
 
     #[clap(skip)]
     pub config_overrides: CliConfigOverrides,
+
+    /// Enable or disable automatic compaction of conversation context.
+    #[arg(long = "auto-compact")]
+    pub auto_compact: Option<bool>,
+
+    /// Percentage of remaining context at which to start auto-compacting (0-100).
+    /// Default: 60
+    #[arg(long = "auto-compact-start", value_name = "PERCENT")]
+    pub auto_compact_start: Option<u8>,
+
+    /// Reduction step (percentage points) to lower the trigger when compaction
+    /// does not sufficiently reduce context usage. Default: 5
+    #[arg(long = "auto-compact-reduction", value_name = "PERCENT")]
+    pub auto_compact_reduction: Option<u8>,
+
+    /// Tolerance band (percentage points) above the current trigger to decide
+    /// if the trigger should be reduced. Default: 8
+    #[arg(long = "auto-compact-tolerance", value_name = "PERCENT")]
+    pub auto_compact_tolerance: Option<u8>,
 }
