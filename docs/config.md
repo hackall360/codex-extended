@@ -13,6 +13,49 @@ Codex supports several mechanisms for setting config values:
 
 Both the `--config` flag and the `config.toml` file support the following options:
 
+## autonomous_mode
+
+Single switch to apply or invert a bundle of permissive, fully-autonomous settings.
+
+Accepted values:
+- `"default"` (or omit the key): no effect; other keys control behavior
+- `true`: apply the autonomous bundle
+- `false`: apply the restrictive inverse bundle
+
+Autonomous bundle (when `true`):
+- `approval_policy = "never"`
+- `sandbox_mode = "danger-full-access"`
+- `edit_mode = "trusted"`
+- `command_timeout_ms = "none"`
+- `tui.auto_compact_enabled = true`
+- Treat current project as trusted for onboarding/trust prompts
+
+Inverse bundle (when `false`):
+- `approval_policy = "untrusted"`
+- `sandbox_mode = "read-only"`
+- `edit_mode = "block"`
+- `command_timeout_ms = 10000`
+- `tui.auto_compact_enabled = false`
+- Treat current project as untrusted for onboarding/trust prompts
+
+Examples:
+
+```toml
+# Explicit string form
+autonomous_mode = "true"
+
+# Or bare boolean
+autonomous_mode = true
+
+# Disable (apply restrictive inverse)
+autonomous_mode = false
+
+# No effect (default behaviour)
+autonomous_mode = "default"
+```
+
+Note: CLI flags (e.g., `--approval-mode`, `--sandbox`, `--edit-mode`) take precedence over `autonomous_mode` for the same setting.
+
 ## model
 
 The model that Codex should use.

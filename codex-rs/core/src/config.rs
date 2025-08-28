@@ -397,6 +397,17 @@ fn apply_toml_override(root: &mut TomlValue, path: &str, value: TomlValue) {
 /// Base config deserialized from ~/.codex/config.toml.
 #[derive(Deserialize, Debug, Clone, Default)]
 pub struct ConfigToml {
+    /// Global flag to enable or disable "autonomous" defaults.
+    ///
+    /// Supports three states:
+    /// - "default": no effect; individual fields control behavior
+    /// - true: apply permissive, fully autonomous settings
+    /// - false: apply the opposite (restrictive) settings
+    ///
+    /// In TOML, users may specify either a string ("default" | "true" | "false")
+    /// or a bare boolean (true | false). Bare booleans map to the string
+    /// equivalents, while the absence of this key means "default".
+    pub autonomous_mode: Option<AutonomousModeToml>,
     /// Optional override of model selection.
     pub model: Option<String>,
 
@@ -530,6 +541,18 @@ pub struct ToolsToml {
 }
 
 impl ConfigToml {
+    /// Resolve the autonomous mode tri-state into a concrete value.
+    fn resolve_autonomous_mode(&self) -> Option<AutonomousMode> {
+        match self.autonomous_mode {
+            None => None,
+            Some(AutonomousModeToml::Bool(b)) => Some(if b {
+                AutonomousMode::True
+            } else {
+                AutonomousMode::False
+            }),
+            Some(AutonomousModeToml::Mode(m)) => Some(m),
+        }
+    }
     /// Derive the effective sandbox policy from the configuration.
     fn derive_sandbox_policy(&self, sandbox_mode_override: Option<SandboxMode>) -> SandboxPolicy {
         let resolved_sandbox_mode = sandbox_mode_override
@@ -556,6 +579,14 @@ impl ConfigToml {
     }
 
     pub fn is_cwd_trusted(&self, resolved_cwd: &Path) -> bool {
+        // Honor autonomous_mode override for trust behavior.
+        if let Some(mode) = self.resolve_autonomous_mode() {
+            match mode {
+                AutonomousMode::True => return true,
+                AutonomousMode::False => return false,
+                AutonomousMode::Default => {}
+            }
+        }
         let projects = self.projects.clone().unwrap_or_default();
 
         let is_path_trusted = |path: &Path| {
@@ -601,6 +632,25 @@ impl ConfigToml {
             None => Ok(ConfigProfile::default()),
         }
     }
+}
+
+/// User-facing autonomous mode values. When set to `true`, we apply permissive
+/// autonomous defaults; when set to `false`, we apply restrictive defaults. The
+/// `default` mode leaves all settings unchanged.
+#[derive(Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum AutonomousMode {
+    Default,
+    True,
+    False,
+}
+
+/// Accept either bare booleans or explicit strings in config.toml.
+#[derive(Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
+#[serde(untagged)]
+pub enum AutonomousModeToml {
+    Bool(bool),
+    Mode(AutonomousMode),
 }
 
 /// Optional overrides for user configuration (e.g., from CLI flags).
@@ -666,7 +716,10 @@ impl Config {
             None => ConfigProfile::default(),
         };
 
-        let sandbox_policy = cfg.derive_sandbox_policy(sandbox_mode);
+        // Pre-resolve autonomous mode for global overrides
+        let autonomous_mode = cfg.resolve_autonomous_mode();
+
+        let mut sandbox_policy = cfg.derive_sandbox_policy(sandbox_mode);
 
         let mut model_providers = built_in_model_providers();
         // Merge user-defined providers into the built-in list.
@@ -773,6 +826,81 @@ impl Config {
         let responses_originator_header: String = cfg
             .responses_originator_header_internal_override
             .unwrap_or(DEFAULT_RESPONSES_ORIGINATOR_HEADER.to_owned());
+        // Determine approval policy with autonomous override
+        let mut approval_effective = approval_policy
+            .or(config_profile.approval_policy)
+            .or(cfg.approval_policy)
+            .unwrap_or_else(AskForApproval::default);
+        if approval_policy.is_none()
+            && let Some(mode) = autonomous_mode {
+                match mode {
+                    AutonomousMode::True => {
+                        approval_effective = AskForApproval::Never;
+                    }
+                    AutonomousMode::False => {
+                        approval_effective = AskForApproval::UnlessTrusted;
+                    }
+                    AutonomousMode::Default => {}
+                }
+            }
+
+        // Override sandbox policy if autonomous mode requests it (unless CLI override provided)
+        if sandbox_mode.is_none()
+            && let Some(mode) = autonomous_mode {
+                match mode {
+                    AutonomousMode::True => {
+                        sandbox_policy = SandboxPolicy::DangerFullAccess;
+                    }
+                    AutonomousMode::False => {
+                        sandbox_policy = SandboxPolicy::new_read_only_policy();
+                    }
+                    AutonomousMode::Default => {}
+                }
+            }
+
+        // TUI config possibly gets its auto_compact_enabled overridden
+        let mut tui_cfg = cfg.tui.clone().unwrap_or_default();
+        if let Some(mode) = autonomous_mode {
+            match mode {
+                AutonomousMode::True => {
+                    tui_cfg.auto_compact_enabled = Some(true);
+                }
+                AutonomousMode::False => {
+                    tui_cfg.auto_compact_enabled = Some(false);
+                }
+                AutonomousMode::Default => {}
+            }
+        }
+
+        // Command timeout override
+        let mut command_timeout_ms_effective = cfg.command_timeout_ms;
+        if let Some(mode) = autonomous_mode {
+            match mode {
+                AutonomousMode::True => {
+                    command_timeout_ms_effective = Some(CommandTimeoutMs::None);
+                }
+                AutonomousMode::False => {
+                    // Explicitly enforce default 10s timeout
+                    command_timeout_ms_effective = Some(CommandTimeoutMs::Millis(10_000));
+                }
+                AutonomousMode::Default => {}
+            }
+        }
+
+        // Edit mode override
+        let mut edit_mode_effective = edit_mode.or(cfg.edit_mode).unwrap_or_default();
+        if edit_mode.is_none()
+            && let Some(mode) = autonomous_mode {
+                match mode {
+                    AutonomousMode::True => {
+                        edit_mode_effective = EditMode::Trusted;
+                    }
+                    AutonomousMode::False => {
+                        edit_mode_effective = EditMode::Block;
+                    }
+                    AutonomousMode::Default => {}
+                }
+            }
 
         let config = Self {
             model,
@@ -782,10 +910,7 @@ impl Config {
             model_provider_id,
             model_provider,
             cwd: resolved_cwd,
-            approval_policy: approval_policy
-                .or(config_profile.approval_policy)
-                .or(cfg.approval_policy)
-                .unwrap_or_else(AskForApproval::default),
+            approval_policy: approval_effective,
             sandbox_policy,
             shell_environment_policy,
             disable_response_storage: config_profile
@@ -802,7 +927,7 @@ impl Config {
             codex_home,
             history,
             file_opener: cfg.file_opener.unwrap_or(UriBasedFileOpener::VsCode),
-            tui: cfg.tui.clone().unwrap_or_default(),
+            tui: tui_cfg,
             codex_linux_sandbox_exe,
 
             hide_agent_reasoning: cfg.hide_agent_reasoning.unwrap_or(false),
@@ -834,8 +959,8 @@ impl Config {
                 .experimental_use_exec_command_tool
                 .unwrap_or(false),
             include_view_image_tool,
-            edit_mode: edit_mode.or(cfg.edit_mode).unwrap_or_default(),
-            command_timeout_ms: cfg.command_timeout_ms,
+            edit_mode: edit_mode_effective,
+            command_timeout_ms: command_timeout_ms_effective,
         };
         Ok(config)
     }
