@@ -1,0 +1,6 @@
+name = "complex_math"
+
+[mcp]
+command = "python"
+args = ["server.py"]
+

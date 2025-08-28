@@ -69,6 +69,25 @@ Thumbs.db
 Icon?
 .Spotlight-V100/
 
+# common compiled artifacts (Windows/Linux/macOS)
+*.exe
+*.dll
+*.so
+*.dylib
+*.a
+*.o
+*.obj
+*.lib
+*.pdb
+*.class
+*.wasm
+
+# Dart/Flutter build outputs
+web-ui/.dart_tool/
+web-ui/build/
+web-ui/.flutter-plugins
+web-ui/.flutter-plugins-dependencies
+
 # Unwanted package managers
 .yarn/
 yarn.lock

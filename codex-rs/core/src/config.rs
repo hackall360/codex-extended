@@ -832,31 +832,33 @@ impl Config {
             .or(cfg.approval_policy)
             .unwrap_or_else(AskForApproval::default);
         if approval_policy.is_none()
-            && let Some(mode) = autonomous_mode {
-                match mode {
-                    AutonomousMode::True => {
-                        approval_effective = AskForApproval::Never;
-                    }
-                    AutonomousMode::False => {
-                        approval_effective = AskForApproval::UnlessTrusted;
-                    }
-                    AutonomousMode::Default => {}
+            && let Some(mode) = autonomous_mode
+        {
+            match mode {
+                AutonomousMode::True => {
+                    approval_effective = AskForApproval::Never;
                 }
+                AutonomousMode::False => {
+                    approval_effective = AskForApproval::UnlessTrusted;
+                }
+                AutonomousMode::Default => {}
             }
+        }
 
         // Override sandbox policy if autonomous mode requests it (unless CLI override provided)
         if sandbox_mode.is_none()
-            && let Some(mode) = autonomous_mode {
-                match mode {
-                    AutonomousMode::True => {
-                        sandbox_policy = SandboxPolicy::DangerFullAccess;
-                    }
-                    AutonomousMode::False => {
-                        sandbox_policy = SandboxPolicy::new_read_only_policy();
-                    }
-                    AutonomousMode::Default => {}
+            && let Some(mode) = autonomous_mode
+        {
+            match mode {
+                AutonomousMode::True => {
+                    sandbox_policy = SandboxPolicy::DangerFullAccess;
                 }
+                AutonomousMode::False => {
+                    sandbox_policy = SandboxPolicy::new_read_only_policy();
+                }
+                AutonomousMode::Default => {}
             }
+        }
 
         // TUI config possibly gets its auto_compact_enabled overridden
         let mut tui_cfg = cfg.tui.clone().unwrap_or_default();
@@ -890,17 +892,34 @@ impl Config {
         // Edit mode override
         let mut edit_mode_effective = edit_mode.or(cfg.edit_mode).unwrap_or_default();
         if edit_mode.is_none()
-            && let Some(mode) = autonomous_mode {
-                match mode {
-                    AutonomousMode::True => {
-                        edit_mode_effective = EditMode::Trusted;
-                    }
-                    AutonomousMode::False => {
-                        edit_mode_effective = EditMode::Block;
-                    }
-                    AutonomousMode::Default => {}
+            && let Some(mode) = autonomous_mode
+        {
+            match mode {
+                AutonomousMode::True => {
+                    edit_mode_effective = EditMode::Trusted;
                 }
+                AutonomousMode::False => {
+                    edit_mode_effective = EditMode::Block;
+                }
+                AutonomousMode::Default => {}
             }
+        }
+
+        // Auto-discover plugins from `plugins/` folders and merge into MCP servers.
+        // Order of precedence (highest to lowest):
+        //   1) Explicit entries in config.toml (cfg.mcp_servers)
+        //   2) Project-local plugins (<cwd>/plugins)
+        //   3) Global plugins (~/.codex/plugins)
+        let (mut discovered_mcp_servers, plugin_warnings) =
+            crate::plugins::discover_mcp_plugins(&resolved_cwd, &codex_home);
+        if !plugin_warnings.is_empty() {
+            for w in plugin_warnings {
+                tracing::warn!("{w}");
+            }
+        }
+        for (k, v) in cfg.mcp_servers.into_iter() {
+            discovered_mcp_servers.insert(k, v);
+        }
 
         let config = Self {
             model,
@@ -921,7 +940,7 @@ impl Config {
             notify: cfg.notify,
             user_instructions,
             base_instructions,
-            mcp_servers: cfg.mcp_servers,
+            mcp_servers: discovered_mcp_servers,
             model_providers,
             project_doc_max_bytes: cfg.project_doc_max_bytes.unwrap_or(PROJECT_DOC_MAX_BYTES),
             codex_home,

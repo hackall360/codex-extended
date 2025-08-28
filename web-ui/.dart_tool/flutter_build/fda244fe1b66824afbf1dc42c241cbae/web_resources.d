@@ -1,1 +1,0 @@
- C:\\Users\\Admin\\Desktop\\development\\codex-ui\\web-ui\\build\\web\\manifest.json:  C:\\Users\\Admin\\Desktop\\development\\codex-ui\\web-ui\\web\\index.html C:\\Users\\Admin\\Desktop\\development\\codex-ui\\web-ui\\web\\manifest.json
