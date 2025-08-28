@@ -612,7 +612,23 @@ Options that are specific to the TUI.
 
 ```toml
 [tui]
-# More to come here
+# Enable or disable automatic compaction when the remaining context
+# percentage is at or below the configured threshold. Defaults to false.
+auto_compact_enabled = true
+
+# Start auto-compacting when the UI shows this percentage (0-100) of
+# context remaining. Defaults to 60 when omitted.
+auto_compact_start_percent = 60
+
+# If a compaction only reduces the context to roughly the trigger range
+# (e.g., 60–68%), lower the trigger by this many percentage points and
+# try again on subsequent turns. Defaults to 5.
+auto_compact_reduction_step_percent = 5
+
+# The tolerance band above the trigger used to decide when compaction
+# wasn’t sufficient (e.g., with start=60 and tolerance=8, a result within
+# [60,68] reduces the trigger by the reduction step). Defaults to 8.
+auto_compact_tolerance_percent = 8
 ```
 
 ## Config reference
@@ -656,7 +672,11 @@ Options that are specific to the TUI.
 | `history.persistence` | `save-all` | `none` | History file persistence (default: `save-all`). |
 | `history.max_bytes` | number | Currently ignored (not enforced). |
 | `file_opener` | `vscode` | `vscode-insiders` | `windsurf` | `cursor` | `none` | URI scheme for clickable citations (default: `vscode`). |
-| `tui` | table | TUI‑specific options (reserved). |
+| `tui` | table | TUI-specific options. |
+| `tui.auto_compact_enabled` | boolean | Enable auto-compaction (default: false). |
+| `tui.auto_compact_start_percent` | number (0–100) | Remaining% at which to trigger compaction (default: 60). |
+| `tui.auto_compact_reduction_step_percent` | number (1–100) | Step to lower the trigger when compaction is insufficient (default: 5). |
+| `tui.auto_compact_tolerance_percent` | number (0–100) | Tolerance band above the trigger used to determine “insufficient” compaction (default: 8). |
 | `hide_agent_reasoning` | boolean | Hide model reasoning events. |
 | `show_raw_agent_reasoning` | boolean | Show raw reasoning (when available). |
 | `model_reasoning_effort` | `minimal` | `low` | `medium` | `high` | Responses API reasoning effort. |

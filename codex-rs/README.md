@@ -63,6 +63,33 @@ codex completion zsh
 codex completion fish
 ```
 
+### Smarter auto-compaction (TUI)
+
+When enabled, the TUI automatically compacts conversation history once the remaining model context drops below a threshold, following the same behavior as using `/compact` manually but adapting the trigger based on results:
+
+- Starts compacting at 60% remaining by default.
+- If a compaction only leaves about 60–68% remaining, the trigger is lowered by 5% and evaluated on future turns.
+- Once compactions tend to land around 40–45% remaining, the trigger is fixed at 40%.
+
+Enable via flags:
+
+```shell
+codex tui --auto-compact \
+  --auto-compact-start 60 \
+  --auto-compact-reduction 5 \
+  --auto-compact-tolerance 8
+```
+
+Or persist in `~/.codex/config.toml` under the `[tui]` section:
+
+```toml
+[tui]
+auto_compact_enabled = true
+auto_compact_start_percent = 60
+auto_compact_reduction_step_percent = 5
+auto_compact_tolerance_percent = 8
+```
+
 ### Experimenting with the Codex Sandbox
 
 To test to see what happens when a command is run under the sandbox provided by Codex, we provide the following subcommands in Codex CLI:
