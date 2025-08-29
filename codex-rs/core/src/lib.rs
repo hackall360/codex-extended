@@ -39,6 +39,8 @@ pub use model_provider_info::create_oss_provider_with_base_url;
 mod conversation_manager;
 pub use conversation_manager::ConversationManager;
 pub use conversation_manager::NewConversation;
+#[cfg(feature = "offline-voice")]
+pub mod local_voice;
 pub mod model_family;
 mod openai_model_info;
 mod openai_tools;

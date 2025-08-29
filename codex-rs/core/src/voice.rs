@@ -6,9 +6,7 @@ use serde::Deserialize;
 use serde_json::json;
 
 #[cfg(feature = "offline-voice")]
-mod local_voice;
-#[cfg(feature = "offline-voice")]
-pub use local_voice::LocalVoice;
+pub use crate::local_voice::LocalVoice;
 
 /// Selects between the default OpenAI voice stack and an optional local stack.
 pub enum VoiceBackend<'a> {
