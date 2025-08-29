@@ -1,0 +1,20 @@
+[package]
+name = "omni-bridge"
+version = "0.1.0"
+edition = "2021"
+
+[features]
+default = []
+openai = ["reqwest", "tokio"]
+anthropic = ["reqwest", "tokio"]
+gemini = ["reqwest", "tokio"]
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "1"
+futures = "0.3"
+async-trait = "0.1"
+bitflags = "2"
+tokio = { version = "1", features = ["macros", "rt-multi-thread"], optional = true }
+reqwest = { version = "0.12", features = ["json", "stream"], optional = true }
