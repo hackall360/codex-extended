@@ -319,8 +319,6 @@ pub enum InputItem {
     },
 }
 
-// TODO(mbolin): Need test to ensure these constants match the enum variants.
-
 pub const APPLY_PATCH_APPROVAL_METHOD: &str = "applyPatchApproval";
 pub const EXEC_COMMAND_APPROVAL_METHOD: &str = "execCommandApproval";
 
@@ -441,5 +439,38 @@ mod tests {
             }),
             serde_json::to_value(&request).unwrap(),
         );
+    }
+
+    #[test]
+    fn approval_method_constants_match_variants() {
+        use std::collections::HashMap;
+        use std::path::PathBuf;
+
+        let conv_id = ConversationId(uuid::Uuid::nil());
+        let apply_req = ServerRequest::ApplyPatchApproval {
+            request_id: RequestId::Integer(1),
+            params: ApplyPatchApprovalParams {
+                conversation_id: conv_id,
+                call_id: String::new(),
+                file_changes: HashMap::new(),
+                reason: None,
+                grant_root: None,
+            },
+        };
+        let v1 = serde_json::to_value(&apply_req).unwrap();
+        assert_eq!(v1.get("method").unwrap(), APPLY_PATCH_APPROVAL_METHOD);
+
+        let exec_req = ServerRequest::ExecCommandApproval {
+            request_id: RequestId::Integer(1),
+            params: ExecCommandApprovalParams {
+                conversation_id: conv_id,
+                call_id: String::new(),
+                command: vec![],
+                cwd: PathBuf::from("."),
+                reason: None,
+            },
+        };
+        let v2 = serde_json::to_value(&exec_req).unwrap();
+        assert_eq!(v2.get("method").unwrap(), EXEC_COMMAND_APPROVAL_METHOD);
     }
 }
