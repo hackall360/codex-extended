@@ -122,6 +122,55 @@ impl ModelProviderInfo {
         Ok(self.apply_http_headers(builder))
     }
 
+    /// Construct a `POST` RequestBuilder for a custom API path. This mirrors
+    /// [`create_request_builder`] but lets callers specify an arbitrary path
+    /// relative to the provider's base URL. Useful for endpoints such as the
+    /// audio transcription or speech APIs which live outside the standard
+    /// chat/responses paths.
+    pub async fn create_request_builder_for_path<'a>(
+        &'a self,
+        client: &'a reqwest::Client,
+        auth: &Option<CodexAuth>,
+        path: &str,
+    ) -> crate::error::Result<reqwest::RequestBuilder> {
+        let effective_auth = match self.api_key() {
+            Ok(Some(key)) => Some(CodexAuth::from_api_key(&key)),
+            Ok(None) => auth.clone(),
+            Err(err) => {
+                if auth.is_some() {
+                    auth.clone()
+                } else {
+                    return Err(err);
+                }
+            }
+        };
+
+        let default_base_url = if matches!(
+            effective_auth,
+            Some(CodexAuth {
+                mode: AuthMode::ChatGPT,
+                ..
+            })
+        ) {
+            "https://chatgpt.com/backend-api/codex".to_string()
+        } else {
+            "https://api.openai.com/v1".to_string()
+        };
+
+        let base_url = self.base_url.clone().unwrap_or(default_base_url);
+
+        let query_string = self.get_query_string();
+        let url = format!("{base_url}{path}{query_string}");
+
+        let mut builder = client.post(url);
+
+        if let Some(auth) = effective_auth.as_ref() {
+            builder = builder.bearer_auth(auth.get_token().await?);
+        }
+
+        Ok(self.apply_http_headers(builder))
+    }
+
     fn get_query_string(&self) -> String {
         self.query_params
             .as_ref()
@@ -162,7 +211,10 @@ impl ModelProviderInfo {
     /// Apply provider-specific HTTP headers (both static and environment-based)
     /// onto an existing `reqwest::RequestBuilder` and return the updated
     /// builder.
-    fn apply_http_headers(&self, mut builder: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
+    pub(crate) fn apply_http_headers(
+        &self,
+        mut builder: reqwest::RequestBuilder,
+    ) -> reqwest::RequestBuilder {
         if let Some(extra) = &self.http_headers {
             for (k, v) in extra {
                 builder = builder.header(k, v);
