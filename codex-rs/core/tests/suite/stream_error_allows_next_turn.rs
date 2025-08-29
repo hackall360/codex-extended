@@ -72,6 +72,8 @@ async fn continue_after_stream_error() {
         name: "mock-openai".into(),
         base_url: Some(format!("{}/v1", server.uri())),
         env_key: Some("PATH".into()),
+        api_keys: None,
+        api_key_index: 0,
         env_key_instructions: None,
         wire_api: WireApi::Responses,
         query_params: None,

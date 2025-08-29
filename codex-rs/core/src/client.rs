@@ -43,7 +43,7 @@ use crate::util::backoff;
 use codex_protocol::config_types::ReasoningEffort as ReasoningEffortConfig;
 use codex_protocol::config_types::ReasoningSummary as ReasoningSummaryConfig;
 use codex_protocol::models::ResponseItem;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 #[derive(Debug, Deserialize)]
 struct ErrorResponse {
@@ -65,7 +65,7 @@ pub struct ModelClient {
     config: Arc<Config>,
     pub(crate) auth_manager: Option<Arc<AuthManager>>,
     pub(crate) client: reqwest::Client,
-    pub(crate) provider: ModelProviderInfo,
+    pub(crate) provider: Arc<Mutex<ModelProviderInfo>>,
     session_id: Uuid,
     effort: ReasoningEffortConfig,
     summary: ReasoningSummaryConfig,
@@ -84,7 +84,7 @@ impl ModelClient {
             config,
             auth_manager,
             client: reqwest::Client::new(),
-            provider,
+        provider: Arc::new(Mutex::new(provider)),
             session_id,
             effort,
             summary,
@@ -105,15 +105,17 @@ impl ModelClient {
     /// the provider config.  Public callers always invoke `stream()` – the
     /// specialised helpers are private to avoid accidental misuse.
     pub async fn stream(&self, prompt: &Prompt) -> Result<ResponseStream> {
-        match self.provider.wire_api {
+        let wire_api = { self.provider.lock().unwrap().wire_api };
+        match wire_api {
             WireApi::Responses => self.stream_responses(prompt).await,
             WireApi::Chat => {
+                let provider = self.provider.lock().unwrap().clone();
                 // Create the raw streaming connection first.
                 let response_stream = stream_chat_completions(
                     prompt,
                     &self.config.model_family,
                     &self.client,
-                    &self.provider,
+                    &provider,
                 )
                 .await?;
 
@@ -147,10 +149,11 @@ impl ModelClient {
 
     /// Implementation for the OpenAI *Responses* experimental API.
     async fn stream_responses(&self, prompt: &Prompt) -> Result<ResponseStream> {
+        let provider = self.provider.lock().unwrap().clone();
         if let Some(path) = &*CODEX_RS_SSE_FIXTURE {
             // short circuit for tests
             warn!(path, "Streaming from fixture");
-            return stream_from_fixture(path, self.provider.clone()).await;
+            return stream_from_fixture(path, provider.clone()).await;
         }
 
         let auth_manager = self.auth_manager.clone();
@@ -224,7 +227,7 @@ impl ModelClient {
         };
 
         let mut attempt = 0;
-        let max_retries = self.provider.request_max_retries();
+        let max_retries = provider.request_max_retries();
 
         loop {
             attempt += 1;
@@ -234,14 +237,13 @@ impl ModelClient {
 
             trace!(
                 "POST to {}: {}",
-                self.provider.get_full_url(&auth),
+                provider.get_full_url(&auth),
                 serde_json::to_string(&payload)?
             );
 
-            let mut req_builder = self
-                .provider
-                .create_request_builder(&self.client, &auth)
-                .await?;
+        let mut req_builder = provider
+            .create_request_builder(&self.client, &auth)
+            .await?;
 
             req_builder = req_builder
                 .header("OpenAI-Beta", "responses=experimental")
@@ -281,7 +283,7 @@ impl ModelClient {
                     tokio::spawn(process_sse(
                         stream,
                         tx_event,
-                        self.provider.stream_idle_timeout(),
+                        provider.stream_idle_timeout(),
                     ));
 
                     return Ok(ResponseStream { rx_event });
@@ -365,7 +367,7 @@ impl ModelClient {
     }
 
     pub fn get_provider(&self) -> ModelProviderInfo {
-        self.provider.clone()
+        self.provider.lock().unwrap().clone()
     }
 
     /// Returns the currently configured model slug.
@@ -390,6 +392,17 @@ impl ModelClient {
 
     pub fn get_auth_manager(&self) -> Option<Arc<AuthManager>> {
         self.auth_manager.clone()
+    }
+
+    /// Rotate to the next API key for the current provider. Returns `true`
+    /// if a rotation occurred.
+    pub fn rotate_api_key(&self) -> bool {
+        self.provider.lock().unwrap().rotate_api_key()
+    }
+
+    /// Reset provider API key rotation back to the first key.
+    pub fn reset_api_key_rotation(&self) {
+        self.provider.lock().unwrap().reset_api_key_rotation();
     }
 }
 
@@ -776,6 +789,8 @@ mod tests {
             name: "test".to_string(),
             base_url: Some("https://test.com".to_string()),
             env_key: Some("TEST_API_KEY".to_string()),
+            api_keys: None,
+            api_key_index: 0,
             env_key_instructions: None,
             wire_api: WireApi::Responses,
             query_params: None,
@@ -836,6 +851,8 @@ mod tests {
             name: "test".to_string(),
             base_url: Some("https://test.com".to_string()),
             env_key: Some("TEST_API_KEY".to_string()),
+            api_keys: None,
+            api_key_index: 0,
             env_key_instructions: None,
             wire_api: WireApi::Responses,
             query_params: None,
@@ -870,6 +887,8 @@ mod tests {
             name: "test".to_string(),
             base_url: Some("https://test.com".to_string()),
             env_key: Some("TEST_API_KEY".to_string()),
+            api_keys: None,
+            api_key_index: 0,
             env_key_instructions: None,
             wire_api: WireApi::Responses,
             query_params: None,
@@ -975,6 +994,8 @@ mod tests {
                 name: "test".to_string(),
                 base_url: Some("https://test.com".to_string()),
                 env_key: Some("TEST_API_KEY".to_string()),
+                api_keys: None,
+                api_key_index: 0,
                 env_key_instructions: None,
                 wire_api: WireApi::Responses,
                 query_params: None,

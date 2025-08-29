@@ -43,6 +43,8 @@ impl ModelClient {
         let auth_mode = self.auth_manager.as_ref().and_then(|m| m.auth());
         let builder = self
             .provider
+            .lock()
+            .unwrap()
             .create_request_builder_for_path(&self.client, &auth_mode, "/audio/transcriptions")
             .await?;
 
@@ -71,6 +73,8 @@ impl ModelClient {
         let auth_mode = self.auth_manager.as_ref().and_then(|m| m.auth());
         let builder = self
             .provider
+            .lock()
+            .unwrap()
             .create_request_builder_for_path(&self.client, &auth_mode, "/audio/speech")
             .await?;
         let payload = json!({

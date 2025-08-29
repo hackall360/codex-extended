@@ -1605,6 +1605,9 @@ async fn run_turn(
             Err(CodexErr::Interrupted) => return Err(CodexErr::Interrupted),
             Err(CodexErr::EnvVar(var)) => return Err(CodexErr::EnvVar(var)),
             Err(e @ (CodexErr::UsageLimitReached(_) | CodexErr::UsageNotIncluded)) => {
+                if turn_context.client.rotate_api_key() {
+                    continue;
+                }
                 return Err(e);
             }
             Err(e) => {

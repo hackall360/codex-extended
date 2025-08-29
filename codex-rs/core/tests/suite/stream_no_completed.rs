@@ -78,6 +78,8 @@ async fn retries_on_early_close() {
         // ModelClient will return an error if the environment variable for the
         // provider is not set.
         env_key: Some("PATH".into()),
+        api_keys: None,
+        api_key_index: 0,
         env_key_instructions: None,
         wire_api: codex_core::WireApi::Responses,
         query_params: None,
