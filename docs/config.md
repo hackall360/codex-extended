@@ -1,6 +1,5 @@
 # Config
 
-
 Codex supports several mechanisms for setting config values:
 
 - Config-specific command-line flags, such as `--model o3` (highest precedence).
@@ -18,11 +17,13 @@ Both the `--config` flag and the `config.toml` file support the following option
 Single switch to apply or invert a bundle of permissive, fully-autonomous settings.
 
 Accepted values:
+
 - `"default"` (or omit the key): no effect; other keys control behavior
 - `true`: apply the autonomous bundle
 - `false`: apply the restrictive inverse bundle
 
 Autonomous bundle (when `true`):
+
 - `approval_policy = "never"`
 - `sandbox_mode = "danger-full-access"`
 - `edit_mode = "trusted"`
@@ -31,6 +32,7 @@ Autonomous bundle (when `true`):
 - Treat current project as trusted for onboarding/trust prompts
 
 Inverse bundle (when `false`):
+
 - `approval_policy = "untrusted"`
 - `sandbox_mode = "read-only"`
 - `edit_mode = "block"`
@@ -99,6 +101,11 @@ Note this makes it possible to use Codex CLI with non-OpenAI models, so long as 
 name = "Ollama"
 base_url = "http://localhost:11434/v1"
 ```
+
+When running with the `--oss` flag, Codex connects to a local Ollama
+instance. If you do not specify a `model`, Codex automatically selects the
+first model reported by Ollama. When no models are installed, Codex downloads
+the default `gpt-oss:20b` model.
 
 Or a third-party provider (using a distinct environment variable for the API key):
 
@@ -263,6 +270,7 @@ command_timeout_ms = "none"
 ```
 
 Notes:
+
 - When a tool call does not specify a timeout, this value is injected by default.
 - Use `"none"` carefully — long-running processes may hang a session.
 
@@ -482,10 +490,10 @@ set = { CI = "1" }
 include_only = ["PATH", "HOME"]
 ```
 
-| Field                     | Type                       | Default | Description                                                                                                                                     |
-| ------------------------- | -------------------------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| `inherit`                 | string                     | `all`   | Starting template for the environment:<br>`all` (clone full parent env), `core` (`HOME`, `PATH`, `USER`, …), or `none` (start empty).           |
-| `ignore_default_excludes` | boolean                    | `false` | When `false`, Codex removes any var whose **name** contains `KEY`, `SECRET`, or `TOKEN` (case-insensitive) before other rules run.              |
+| Field                     | Type                 | Default | Description                                                                                                                                     |
+| ------------------------- | -------------------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `inherit`                 | string               | `all`   | Starting template for the environment:<br>`all` (clone full parent env), `core` (`HOME`, `PATH`, `USER`, …), or `none` (start empty).           |
+| `ignore_default_excludes` | boolean              | `false` | When `false`, Codex removes any var whose **name** contains `KEY`, `SECRET`, or `TOKEN` (case-insensitive) before other rules run.              |
 | `exclude`                 | array<string>        | `[]`    | Case-insensitive glob patterns to drop after the default filter.<br>Examples: `"AWS_*"`, `"AZURE_*"`.                                           |
 | `set`                     | table<string,string> | `{}`    | Explicit key/value overrides or additions – always win over inherited values.                                                                   |
 | `include_only`            | array<string>        | `[]`    | If non-empty, a whitelist of patterns; only variables that match _one_ pattern survive the final step. (Generally used with `inherit = "all"`.) |
@@ -676,61 +684,61 @@ auto_compact_tolerance_percent = 8
 
 ## Config reference
 
-| Key | Type / Values | Notes |
-| --- | --- | --- |
-| `model` | string | Model to use (e.g., `gpt-5`). |
-| `model_provider` | string | Provider id from `model_providers` (default: `openai`). |
-| `model_context_window` | number | Context window tokens. |
-| `model_max_output_tokens` | number | Max output tokens. |
-| `approval_policy` | `untrusted` | `on-failure` | `on-request` | `never` | When to prompt for approval. |
-| `edit_mode` | `request` | `block` | `trusted` | Edit/command authorization mode. |
-| `sandbox_mode` | `read-only` | `workspace-write` | `danger-full-access` | OS sandbox policy. |
-| `sandbox_workspace_write.writable_roots` | array<string> | Extra writable roots in workspace‑write. |
-| `sandbox_workspace_write.network_access` | boolean | Allow network in workspace‑write (default: false). |
-| `sandbox_workspace_write.exclude_tmpdir_env_var` | boolean | Exclude `$TMPDIR` from writable roots (default: false). |
-| `sandbox_workspace_write.exclude_slash_tmp` | boolean | Exclude `/tmp` from writable roots (default: false). |
-| `disable_response_storage` | boolean | Required for ZDR orgs. |
-| `notify` | array<string> | External program for notifications. |
-| `instructions` | string | Currently ignored; use `experimental_instructions_file` or `AGENTS.md`. |
-| `mcp_servers.<id>.command` | string | MCP server launcher command. |
-| `mcp_servers.<id>.args` | array<string> | MCP server args. |
-| `mcp_servers.<id>.env` | map<string,string> | MCP server env vars. |
-| `model_providers.<id>.name` | string | Display name. |
-| `model_providers.<id>.base_url` | string | API base URL. |
-| `model_providers.<id>.env_key` | string | Env var for API key. |
-| `model_providers.<id>.wire_api` | `chat` | `responses` | Protocol used (default: `chat`). |
-| `model_providers.<id>.query_params` | map<string,string> | Extra query params (e.g., Azure `api-version`). |
-| `model_providers.<id>.http_headers` | map<string,string> | Additional static headers. |
-| `model_providers.<id>.env_http_headers` | map<string,string> | Headers sourced from env vars. |
-| `model_providers.<id>.request_max_retries` | number | Per‑provider HTTP retry count (default: 4). |
-| `model_providers.<id>.stream_max_retries` | number | SSE stream retry count (default: 5). |
-| `model_providers.<id>.stream_idle_timeout_ms` | number | SSE idle timeout (ms) (default: 300000). |
-| `request_max_retries` | number | Global default HTTP retry count applied to selected provider. |
-| `stream_max_retries` | number | Global default SSE stream retry count applied to selected provider. |
-| `stream_idle_timeout_ms` | number | Global default SSE idle timeout (ms) applied to selected provider. |
-| `project_doc_max_bytes` | number | Max bytes to read from `AGENTS.md`. |
-| `command_timeout_ms` | number or `"none"` | Default host command timeout in ms or disable with `"none"`. |
-| `profile` | string | Active profile name. |
-| `profiles.<name>.*` | various | Profile‑scoped overrides of the same keys. |
-| `history.persistence` | `save-all` | `none` | History file persistence (default: `save-all`). |
-| `history.max_bytes` | number | Currently ignored (not enforced). |
-| `file_opener` | `vscode` | `vscode-insiders` | `windsurf` | `cursor` | `none` | URI scheme for clickable citations (default: `vscode`). |
-| `tui` | table | TUI-specific options. |
-| `tui.auto_compact_enabled` | boolean | Enable auto-compaction (default: false). |
-| `tui.auto_compact_start_percent` | number (0–100) | Remaining% at which to trigger compaction (default: 60). |
-| `tui.auto_compact_reduction_step_percent` | number (1–100) | Step to lower the trigger when compaction is insufficient (default: 5). |
-| `tui.auto_compact_tolerance_percent` | number (0–100) | Tolerance band above the trigger used to determine “insufficient” compaction (default: 8). |
-| `hide_agent_reasoning` | boolean | Hide model reasoning events. |
-| `show_raw_agent_reasoning` | boolean | Show raw reasoning (when available). |
-| `model_reasoning_effort` | `minimal` | `low` | `medium` | `high` | Responses API reasoning effort. |
-| `model_reasoning_summary` | `auto` | `concise` | `detailed` | `none` | Reasoning summaries. |
-| `model_verbosity` | `low` | `medium` | `high` | GPT‑5 text verbosity (Responses API). |
-| `model_supports_reasoning_summaries` | boolean | Force‑enable reasoning summaries. |
-| `chatgpt_base_url` | string | Base URL for ChatGPT auth flow. |
-| `experimental_resume` | string (path) | Resume JSONL path (internal/experimental). |
-| `experimental_instructions_file` | string (path) | Replace built‑in instructions (experimental). |
-| `experimental_use_exec_command_tool` | boolean | Use experimental exec command tool. |
-| `responses_originator_header_internal_override` | string | Override `originator` header value. |
-| `projects.<path>.trust_level` | string | Mark project/worktree as trusted (only `"trusted"` is recognized). |
-| `preferred_auth_method` | `chatgpt` | `apikey` | Select default auth method (default: `chatgpt`). |
-| `tools.web_search` | boolean | Enable web search tool (alias: `web_search_request`) (default: false). |
+| Key                                              | Type / Values      | Notes                                                                                      |
+| ------------------------------------------------ | ------------------ | ------------------------------------------------------------------------------------------ | ------------------------------------------------ | ------------------------------------- | ------------------------------- | ------------------------------------------------------- |
+| `model`                                          | string             | Model to use (e.g., `gpt-5`).                                                              |
+| `model_provider`                                 | string             | Provider id from `model_providers` (default: `openai`).                                    |
+| `model_context_window`                           | number             | Context window tokens.                                                                     |
+| `model_max_output_tokens`                        | number             | Max output tokens.                                                                         |
+| `approval_policy`                                | `untrusted`        | `on-failure`                                                                               | `on-request`                                     | `never`                               | When to prompt for approval.    |
+| `edit_mode`                                      | `request`          | `block`                                                                                    | `trusted`                                        | Edit/command authorization mode.      |
+| `sandbox_mode`                                   | `read-only`        | `workspace-write`                                                                          | `danger-full-access`                             | OS sandbox policy.                    |
+| `sandbox_workspace_write.writable_roots`         | array<string>      | Extra writable roots in workspace‑write.                                                   |
+| `sandbox_workspace_write.network_access`         | boolean            | Allow network in workspace‑write (default: false).                                         |
+| `sandbox_workspace_write.exclude_tmpdir_env_var` | boolean            | Exclude `$TMPDIR` from writable roots (default: false).                                    |
+| `sandbox_workspace_write.exclude_slash_tmp`      | boolean            | Exclude `/tmp` from writable roots (default: false).                                       |
+| `disable_response_storage`                       | boolean            | Required for ZDR orgs.                                                                     |
+| `notify`                                         | array<string>      | External program for notifications.                                                        |
+| `instructions`                                   | string             | Currently ignored; use `experimental_instructions_file` or `AGENTS.md`.                    |
+| `mcp_servers.<id>.command`                       | string             | MCP server launcher command.                                                               |
+| `mcp_servers.<id>.args`                          | array<string>      | MCP server args.                                                                           |
+| `mcp_servers.<id>.env`                           | map<string,string> | MCP server env vars.                                                                       |
+| `model_providers.<id>.name`                      | string             | Display name.                                                                              |
+| `model_providers.<id>.base_url`                  | string             | API base URL.                                                                              |
+| `model_providers.<id>.env_key`                   | string             | Env var for API key.                                                                       |
+| `model_providers.<id>.wire_api`                  | `chat`             | `responses`                                                                                | Protocol used (default: `chat`).                 |
+| `model_providers.<id>.query_params`              | map<string,string> | Extra query params (e.g., Azure `api-version`).                                            |
+| `model_providers.<id>.http_headers`              | map<string,string> | Additional static headers.                                                                 |
+| `model_providers.<id>.env_http_headers`          | map<string,string> | Headers sourced from env vars.                                                             |
+| `model_providers.<id>.request_max_retries`       | number             | Per‑provider HTTP retry count (default: 4).                                                |
+| `model_providers.<id>.stream_max_retries`        | number             | SSE stream retry count (default: 5).                                                       |
+| `model_providers.<id>.stream_idle_timeout_ms`    | number             | SSE idle timeout (ms) (default: 300000).                                                   |
+| `request_max_retries`                            | number             | Global default HTTP retry count applied to selected provider.                              |
+| `stream_max_retries`                             | number             | Global default SSE stream retry count applied to selected provider.                        |
+| `stream_idle_timeout_ms`                         | number             | Global default SSE idle timeout (ms) applied to selected provider.                         |
+| `project_doc_max_bytes`                          | number             | Max bytes to read from `AGENTS.md`.                                                        |
+| `command_timeout_ms`                             | number or `"none"` | Default host command timeout in ms or disable with `"none"`.                               |
+| `profile`                                        | string             | Active profile name.                                                                       |
+| `profiles.<name>.*`                              | various            | Profile‑scoped overrides of the same keys.                                                 |
+| `history.persistence`                            | `save-all`         | `none`                                                                                     | History file persistence (default: `save-all`).  |
+| `history.max_bytes`                              | number             | Currently ignored (not enforced).                                                          |
+| `file_opener`                                    | `vscode`           | `vscode-insiders`                                                                          | `windsurf`                                       | `cursor`                              | `none`                          | URI scheme for clickable citations (default: `vscode`). |
+| `tui`                                            | table              | TUI-specific options.                                                                      |
+| `tui.auto_compact_enabled`                       | boolean            | Enable auto-compaction (default: false).                                                   |
+| `tui.auto_compact_start_percent`                 | number (0–100)     | Remaining% at which to trigger compaction (default: 60).                                   |
+| `tui.auto_compact_reduction_step_percent`        | number (1–100)     | Step to lower the trigger when compaction is insufficient (default: 5).                    |
+| `tui.auto_compact_tolerance_percent`             | number (0–100)     | Tolerance band above the trigger used to determine “insufficient” compaction (default: 8). |
+| `hide_agent_reasoning`                           | boolean            | Hide model reasoning events.                                                               |
+| `show_raw_agent_reasoning`                       | boolean            | Show raw reasoning (when available).                                                       |
+| `model_reasoning_effort`                         | `minimal`          | `low`                                                                                      | `medium`                                         | `high`                                | Responses API reasoning effort. |
+| `model_reasoning_summary`                        | `auto`             | `concise`                                                                                  | `detailed`                                       | `none`                                | Reasoning summaries.            |
+| `model_verbosity`                                | `low`              | `medium`                                                                                   | `high`                                           | GPT‑5 text verbosity (Responses API). |
+| `model_supports_reasoning_summaries`             | boolean            | Force‑enable reasoning summaries.                                                          |
+| `chatgpt_base_url`                               | string             | Base URL for ChatGPT auth flow.                                                            |
+| `experimental_resume`                            | string (path)      | Resume JSONL path (internal/experimental).                                                 |
+| `experimental_instructions_file`                 | string (path)      | Replace built‑in instructions (experimental).                                              |
+| `experimental_use_exec_command_tool`             | boolean            | Use experimental exec command tool.                                                        |
+| `responses_originator_header_internal_override`  | string             | Override `originator` header value.                                                        |
+| `projects.<path>.trust_level`                    | string             | Mark project/worktree as trusted (only `"trusted"` is recognized).                         |
+| `preferred_auth_method`                          | `chatgpt`          | `apikey`                                                                                   | Select default auth method (default: `chatgpt`). |
+| `tools.web_search`                               | boolean            | Enable web search tool (alias: `web_search_request`) (default: false).                     |

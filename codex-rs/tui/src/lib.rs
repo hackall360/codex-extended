@@ -220,7 +220,7 @@ pub async fn run_main(
         .with_filter(env_filter());
 
     if cli.oss {
-        codex_ollama::ensure_oss_ready(&config)
+        codex_ollama::ensure_oss_ready(&mut config)
             .await
             .map_err(|e| std::io::Error::other(format!("OSS setup failed: {e}")))?;
     }
