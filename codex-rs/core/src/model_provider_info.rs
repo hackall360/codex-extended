@@ -49,6 +49,15 @@ pub struct ModelProviderInfo {
     /// Environment variable that stores the user's API key for this provider.
     pub env_key: Option<String>,
 
+    /// List of API keys to use for this provider when an `env_key` is not set.
+    /// Codex will rotate through this list when usage limits are encountered.
+    pub api_keys: Option<Vec<String>>,
+
+    /// Index of the currently active API key within `api_keys`.
+    /// Defaults to `0` and is automatically incremented when rotating keys.
+    #[serde(default)]
+    pub api_key_index: usize,
+
     /// Optional instructions to help the user get a valid value for the
     /// variable and set it.
     pub env_key_instructions: Option<String>,
@@ -255,8 +264,36 @@ impl ModelProviderInfo {
                         })
                     })
             }
-            None => Ok(None),
+            None => {
+                if let Some(keys) = &self.api_keys {
+                    if keys.is_empty() {
+                        Ok(None)
+                    } else {
+                        let idx = self.api_key_index % keys.len();
+                        Ok(Some(keys[idx].clone()))
+                    }
+                } else {
+                    Ok(None)
+                }
+            }
         }
+    }
+
+    /// Advance to the next API key in `api_keys`. Returns `true` if rotation
+    /// occurred and `false` otherwise (e.g. zero or one key configured).
+    pub fn rotate_api_key(&mut self) -> bool {
+        if let Some(keys) = &self.api_keys {
+            if keys.len() > 1 {
+                self.api_key_index = (self.api_key_index + 1) % keys.len();
+                return true;
+            }
+        }
+        false
+    }
+
+    /// Reset key rotation to the first key.
+    pub fn reset_api_key_rotation(&mut self) {
+        self.api_key_index = 0;
     }
 
     /// Effective maximum number of request retries for this provider.
@@ -307,6 +344,8 @@ pub fn built_in_model_providers() -> HashMap<String, ModelProviderInfo> {
                     .ok()
                     .filter(|v| !v.trim().is_empty()),
                 env_key: None,
+                api_keys: None,
+                api_key_index: 0,
                 env_key_instructions: None,
                 wire_api: WireApi::Responses,
                 query_params: None,
@@ -366,6 +405,8 @@ pub fn create_oss_provider_with_base_url(base_url: &str) -> ModelProviderInfo {
         name: "gpt-oss".into(),
         base_url: Some(base_url.into()),
         env_key: None,
+        api_keys: None,
+        api_key_index: 0,
         env_key_instructions: None,
         wire_api: WireApi::Chat,
         query_params: None,
@@ -393,6 +434,8 @@ base_url = "http://localhost:11434/v1"
             name: "Ollama".into(),
             base_url: Some("http://localhost:11434/v1".into()),
             env_key: None,
+            api_keys: None,
+            api_key_index: 0,
             env_key_instructions: None,
             wire_api: WireApi::Chat,
             query_params: None,
@@ -420,6 +463,8 @@ query_params = { api-version = "2025-04-01-preview" }
             name: "Azure".into(),
             base_url: Some("https://xxxxx.openai.azure.com/openai".into()),
             env_key: Some("AZURE_OPENAI_API_KEY".into()),
+            api_keys: None,
+            api_key_index: 0,
             env_key_instructions: None,
             wire_api: WireApi::Chat,
             query_params: Some(maplit::hashmap! {
@@ -450,6 +495,8 @@ env_http_headers = { "X-Example-Env-Header" = "EXAMPLE_ENV_VAR" }
             name: "Example".into(),
             base_url: Some("https://example.com".into()),
             env_key: Some("API_KEY".into()),
+            api_keys: None,
+            api_key_index: 0,
             env_key_instructions: None,
             wire_api: WireApi::Chat,
             query_params: None,
@@ -467,5 +514,31 @@ env_http_headers = { "X-Example-Env-Header" = "EXAMPLE_ENV_VAR" }
 
         let provider: ModelProviderInfo = toml::from_str(azure_provider_toml).unwrap();
         assert_eq!(expected_provider, provider);
+    }
+
+    #[test]
+    fn rotates_api_keys() {
+        let mut provider = ModelProviderInfo {
+            name: "test".into(),
+            base_url: None,
+            env_key: None,
+            api_keys: Some(vec!["k1".into(), "k2".into()]),
+            api_key_index: 0,
+            env_key_instructions: None,
+            wire_api: WireApi::Chat,
+            query_params: None,
+            http_headers: None,
+            env_http_headers: None,
+            request_max_retries: None,
+            stream_max_retries: None,
+            stream_idle_timeout_ms: None,
+            requires_openai_auth: false,
+        };
+
+        assert_eq!(provider.api_key().unwrap(), Some("k1".into()));
+        assert!(provider.rotate_api_key());
+        assert_eq!(provider.api_key().unwrap(), Some("k2".into()));
+        assert!(provider.rotate_api_key());
+        assert_eq!(provider.api_key().unwrap(), Some("k1".into()));
     }
 }

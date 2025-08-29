@@ -87,6 +87,11 @@ base_url = "https://api.openai.com/v1"
 # using Codex with this provider. The value of the environment variable must be
 # non-empty and will be used in the `Bearer TOKEN` HTTP header for the POST request.
 env_key = "OPENAI_API_KEY"
+# Alternatively, provide a list of API keys directly. Codex will rotate through
+# these keys when usage limits are hit.
+# api_keys = ["KEY_ONE", "KEY_TWO"]
+# Index of the current key (defaults to 0). Codex updates this automatically when rotating.
+# api_key_index = 0
 # Valid values for wire_api are "chat" and "responses". Defaults to "chat" if omitted.
 wire_api = "chat"
 # If necessary, extra query params that need to be added to the URL.
