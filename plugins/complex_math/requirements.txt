@@ -1,0 +1,2 @@
+# Python dependencies for the complex_math plugin
+# This plugin currently relies only on the Python standard library.

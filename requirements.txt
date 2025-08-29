@@ -1,0 +1,2 @@
+# Python dependencies for repository scripts
+# These scripts currently rely only on the Python standard library.

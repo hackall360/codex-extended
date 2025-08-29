@@ -34,7 +34,7 @@ name = "complex_math"
 [mcp]
 # Program to launch (bare name on PATH, absolute path, or relative to the plugin folder)
 command = "python"
-args = ["server.py"]
+args = ["run.py"]
 
 # Optional environment for the process
 # env = { PYTHONUNBUFFERED = "1" }
@@ -65,6 +65,8 @@ Folder layout:
 plugins/
   complex_math/
     plugin.toml
+    requirements.txt
+    run.py
     server.py
 ```
 
@@ -75,10 +77,10 @@ name = "complex_math"
 
 [mcp]
 command = "python"
-args = ["server.py"]
+args = ["run.py"]
 ```
 
-`server.py` is a small, dependency‑free JSON‑RPC MCP server. It:
+`run.py` bootstraps a virtual environment using `requirements.txt` and then executes `server.py`, a small, dependency‑free JSON‑RPC MCP server. `server.py`:
 
 - Responds to `initialize` with `tools` capability
 - Implements `tools/list` with the schemas above
