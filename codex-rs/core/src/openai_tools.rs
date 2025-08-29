@@ -1,5 +1,6 @@
 use serde::Deserialize;
 use serde::Serialize;
+use serde::ser::Error as _;
 use serde_json::Value as JsonValue;
 use serde_json::json;
 use std::collections::BTreeMap;
@@ -17,11 +18,60 @@ use crate::tool_apply_patch::create_apply_patch_json_tool;
 pub struct ResponsesApiTool {
     pub(crate) name: String,
     pub(crate) description: String,
-    /// TODO: Validation. When strict is set to true, the JSON schema,
-    /// `required` and `additional_properties` must be present. All fields in
-    /// `properties` must be present in `required`.
+    /// Whether the tool enforces a strict JSON schema. When set to `true`, the
+    /// schema **must**:
+    /// - be an object schema
+    /// - specify `required`
+    /// - set `additional_properties` to `false`
+    /// - list every property in `required`
     pub(crate) strict: bool,
     pub(crate) parameters: JsonSchema,
+}
+
+impl ResponsesApiTool {
+    /// Validate that the schema conforms to the invariants required by the
+    /// OpenAI Responses API when `strict` is `true`.
+    pub fn validate(&self) -> serde_json::Result<()> {
+        if !self.strict {
+            return Ok(());
+        }
+        match &self.parameters {
+            JsonSchema::Object {
+                properties,
+                required,
+                additional_properties,
+            } => {
+                let required = required
+                    .as_ref()
+                    .ok_or_else(|| serde_json::Error::custom("missing required"))?;
+                let additional_properties = additional_properties
+                    .ok_or_else(|| serde_json::Error::custom("missing additional_properties"))?;
+                if additional_properties {
+                    return Err(serde_json::Error::custom(
+                        "additional_properties must be false",
+                    ));
+                }
+                for key in properties.keys() {
+                    if !required.contains(key) {
+                        return Err(serde_json::Error::custom(format!(
+                            "{key} not listed in required"
+                        )));
+                    }
+                }
+                for key in required {
+                    if !properties.contains_key(key) {
+                        return Err(serde_json::Error::custom(format!(
+                            "{key} listed in required but missing from properties"
+                        )));
+                    }
+                }
+                Ok(())
+            }
+            _ => Err(serde_json::Error::custom(
+                "strict tool parameters must be an object schema",
+            )),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -335,6 +385,9 @@ pub fn create_tools_json_for_responses_api(
     let mut tools_json = Vec::new();
 
     for tool in tools {
+        if let OpenAiTool::Function(t) = tool {
+            t.validate().map_err(crate::error::CodexErr::Json)?;
+        }
         tools_json.push(serde_json::to_value(tool)?);
     }
 
@@ -502,12 +555,17 @@ fn sanitize_json_schema(value: &mut JsonValue) {
                         JsonValue::Object(serde_json::Map::new()),
                     );
                 }
-                // If additionalProperties is an object schema, sanitize it too.
-                // Leave booleans as-is, since JSON Schema allows boolean here.
+                // If additionalProperties is a schema object, we cannot represent
+                // it in our restricted `JsonSchema` enum (which only supports a
+                // boolean). In this case, sanitize the schema and then replace it
+                // with `true` to preserve the intent of allowing additional
+                // properties. Booleans are left as-is.
                 if let Some(ap) = map.get_mut("additionalProperties") {
-                    let is_bool = matches!(ap, JsonValue::Bool(_));
-                    if !is_bool {
+                    if !matches!(ap, JsonValue::Bool(_)) {
+                        // Sanitizing ensures any nested schema is well-formed
+                        // before we drop it.
                         sanitize_json_schema(ap);
+                        *ap = JsonValue::Bool(true);
                     }
                 }
             }
@@ -598,6 +656,7 @@ mod tests {
     use crate::model_family::find_family_for_model;
     use mcp_types::ToolInputSchema;
     use pretty_assertions::assert_eq;
+    use std::collections::BTreeMap;
 
     use super::*;
 
@@ -1078,5 +1137,188 @@ mod tests {
                 strict: false,
             })
         );
+    }
+
+    #[test]
+    fn test_mcp_tool_additional_properties_schema_defaults_to_true() {
+        let model_family = find_family_for_model("o3").expect("o3 should be a valid model family");
+        let config = ToolsConfig::new(&ToolsConfigParams {
+            model_family: &model_family,
+            approval_policy: AskForApproval::Never,
+            sandbox_policy: SandboxPolicy::ReadOnly,
+            include_plan_tool: false,
+            include_apply_patch_tool: false,
+            include_web_search_request: true,
+            use_streamable_shell_tool: false,
+            include_view_image_tool: true,
+        });
+
+        let tools = get_openai_tools(
+            &config,
+            Some(HashMap::from([(
+                "dash/object".to_string(),
+                mcp_types::Tool {
+                    name: "object".to_string(),
+                    input_schema: ToolInputSchema {
+                        properties: Some(serde_json::json!({
+                            "obj": {
+                                "type": "object",
+                                "additionalProperties": { "type": "integer" }
+                            }
+                        })),
+                        required: None,
+                        r#type: "object".to_string(),
+                    },
+                    output_schema: None,
+                    title: None,
+                    annotations: None,
+                    description: Some("Object".to_string()),
+                },
+            )])),
+        );
+
+        assert_eq_tool_names(
+            &tools,
+            &["shell", "web_search", "view_image", "dash/object"],
+        );
+        assert_eq!(
+            tools[3],
+            OpenAiTool::Function(ResponsesApiTool {
+                name: "dash/object".to_string(),
+                parameters: JsonSchema::Object {
+                    properties: BTreeMap::from([(
+                        "obj".to_string(),
+                        JsonSchema::Object {
+                            properties: BTreeMap::new(),
+                            required: None,
+                            additional_properties: Some(true),
+                        }
+                    )]),
+                    required: None,
+                    additional_properties: None,
+                },
+                description: "Object".to_string(),
+                strict: false,
+            })
+        );
+    }
+
+    #[test]
+    fn validate_strict_tool_succeeds() {
+        let tool = ResponsesApiTool {
+            name: "test".to_string(),
+            description: String::new(),
+            strict: true,
+            parameters: JsonSchema::Object {
+                properties: BTreeMap::from([(
+                    "foo".to_string(),
+                    JsonSchema::String { description: None },
+                )]),
+                required: Some(vec!["foo".to_string()]),
+                additional_properties: Some(false),
+            },
+        };
+        tool.validate().unwrap();
+    }
+
+    #[test]
+    fn validate_strict_tool_errors_on_missing_required() {
+        let tool = ResponsesApiTool {
+            name: "test".to_string(),
+            description: String::new(),
+            strict: true,
+            parameters: JsonSchema::Object {
+                properties: BTreeMap::from([(
+                    "foo".to_string(),
+                    JsonSchema::String { description: None },
+                )]),
+                required: None,
+                additional_properties: Some(false),
+            },
+        };
+        assert!(tool.validate().is_err());
+    }
+
+    #[test]
+    fn validate_strict_tool_errors_on_non_object() {
+        let tool = ResponsesApiTool {
+            name: "test".to_string(),
+            description: String::new(),
+            strict: true,
+            parameters: JsonSchema::String { description: None },
+        };
+        assert!(tool.validate().is_err());
+    }
+
+    #[test]
+    fn validate_strict_tool_errors_on_additional_properties_true() {
+        let tool = ResponsesApiTool {
+            name: "test".to_string(),
+            description: String::new(),
+            strict: true,
+            parameters: JsonSchema::Object {
+                properties: BTreeMap::from([(
+                    "foo".to_string(),
+                    JsonSchema::String { description: None },
+                )]),
+                required: Some(vec!["foo".to_string()]),
+                additional_properties: Some(true),
+            },
+        };
+        assert!(tool.validate().is_err());
+    }
+
+    #[test]
+    fn validate_strict_tool_errors_on_property_not_required() {
+        let tool = ResponsesApiTool {
+            name: "test".to_string(),
+            description: String::new(),
+            strict: true,
+            parameters: JsonSchema::Object {
+                properties: BTreeMap::from([
+                    ("foo".to_string(), JsonSchema::String { description: None }),
+                    ("bar".to_string(), JsonSchema::String { description: None }),
+                ]),
+                required: Some(vec!["foo".to_string()]),
+                additional_properties: Some(false),
+            },
+        };
+        assert!(tool.validate().is_err());
+    }
+
+    #[test]
+    fn validate_strict_tool_errors_on_missing_property_for_required() {
+        let tool = ResponsesApiTool {
+            name: "test".to_string(),
+            description: String::new(),
+            strict: true,
+            parameters: JsonSchema::Object {
+                properties: BTreeMap::from([(
+                    "foo".to_string(),
+                    JsonSchema::String { description: None },
+                )]),
+                required: Some(vec!["foo".to_string(), "bar".to_string()]),
+                additional_properties: Some(false),
+            },
+        };
+        assert!(tool.validate().is_err());
+    }
+
+    #[test]
+    fn validate_strict_tool_errors_on_missing_additional_properties() {
+        let tool = ResponsesApiTool {
+            name: "test".to_string(),
+            description: String::new(),
+            strict: true,
+            parameters: JsonSchema::Object {
+                properties: BTreeMap::from([(
+                    "foo".to_string(),
+                    JsonSchema::String { description: None },
+                )]),
+                required: Some(vec!["foo".to_string()]),
+                additional_properties: None,
+            },
+        };
+        assert!(tool.validate().is_err());
     }
 }
