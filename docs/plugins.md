@@ -1,6 +1,6 @@
 # Codex Plugins
 
-Codex supports drop‑in plugins that extend the agent with additional tools — without changing any built‑in behavior. Plugins are simple MCP servers discovered from well‑known folders and auto‑registered at startup.
+Codex supports drop-in plugins that extend the agent with additional tools -- without changing any built-in behavior. Plugins are simple MCP servers discovered from well-known folders and auto-registered at startup.
 
 - Project plugins: `<project>/plugins/<plugin>/...`
 - Global plugins: `~/.codex/plugins/<plugin>/...`
@@ -14,8 +14,8 @@ Codex already understands MCP; this layer just makes it easy to add your own ser
 Load order and override behavior:
 
 1. Global plugins (`~/.codex/plugins/*/plugin.toml`)
-2. Project plugins (`<project>/plugins/*/plugin.toml`) — override globals with the same name
-3. Explicit `mcp_servers` from `config.toml` — override discovered plugins
+2. Project plugins (`<project>/plugins/*/plugin.toml`) -- override globals with the same name
+3. Explicit `mcp_servers` from `config.toml` -- override discovered plugins
 
 If a manifest fails to parse or a plugin name is invalid, Codex logs a warning and skips it (no crash).
 
@@ -23,7 +23,7 @@ If a manifest fails to parse or a plugin name is invalid, Codex logs a warning a
 
 - `name` must match `^[a-zA-Z0-9_-]+$`.
 - The `name` becomes the MCP server name; each tool is qualified internally as `<server>__<tool>`.
-- Tool names must also respect MCP’s allowed characters.
+- Tool names must also respect MCP's allowed characters.
 
 ## Manifest Schema (`plugin.toml`)
 
@@ -42,7 +42,7 @@ args = ["run.py"]
 
 ## Implementing an MCP Server
 
-Minimum methods to implement over JSON‑RPC 2.0:
+Minimum methods to implement over JSON-RPC 2.0:
 
 - `initialize`: return protocol and server info, plus `capabilities.tools`
 - `tools/list`: return the tools your server provides with JSON Schema input
@@ -55,9 +55,9 @@ Codex handles the rest: starting your server, listing tools, exposing them to th
 This repository includes a working example at `plugins/complex_math/` that Codex will discover and load when run from the repo root.
 
 - Tools provided:
-  - `calculate(expr: string)`: safely evaluate math expressions (+, −, ×, ÷, **, parentheses, `sin`, `cos`, `tan`, `log`, `exp`, `sqrt`, `abs`, `pow`, and constants `pi`, `e`, `tau`).
+  - `calculate(expr: string)`: safely evaluate math expressions (+, -, *, /, **, parentheses, `sin`, `cos`, `tan`, `log`, `exp`, `sqrt`, `abs`, `pow`, and constants `pi`, `e`, `tau`).
   - `quadratic_solve(a: number, b: number, c: number)`: solve `ax^2 + bx + c = 0` (real or complex roots).
-  - `matrix_det(matrix: number[][])`: determinant of a 2×2 or 3×3 matrix.
+  - `matrix_det(matrix: number[][])`: determinant of a 2x2 or 3x3 matrix.
 
 Folder layout:
 
@@ -80,11 +80,11 @@ command = "python"
 args = ["run.py"]
 ```
 
-`run.py` bootstraps a virtual environment using `requirements.txt` and then executes `server.py`, a small, dependency‑free JSON‑RPC MCP server. `server.py`:
+`run.py` bootstraps a virtual environment using `requirements.txt` and then executes `server.py`, a small, dependency-free JSON-RPC MCP server. `server.py`:
 
 - Responds to `initialize` with `tools` capability
 - Implements `tools/list` with the schemas above
-- Implements `tools/call` to perform the math, returning both a human‑readable text block and machine‑readable `structuredContent`
+- Implements `tools/call` to perform the math, returning both a human-readable text block and machine-readable `structuredContent`
 
 When Codex runs in this repository, it will automatically start the `complex_math` server and expose its tools to the model as function calls named `complex_math__calculate`, `complex_math__quadratic_solve`, and `complex_math__matrix_det`.
 
@@ -94,12 +94,12 @@ When Codex runs in this repository, it will automatically start the `complex_mat
 2. Ensure your command is runnable (on PATH or referenced relatively/absolutely).
 3. Run Codex from the project root; check logs for any plugin startup issues.
 4. Ask the model to use your tool by name; for example:
-   - “Use `complex_math__calculate` to evaluate `sin(pi/4)^2`.”
+   - "Use `complex_math__calculate` to evaluate `sin(pi/4)^2`."
 
 ## Tips and Security Considerations
 
 - Keep servers isolated; avoid launching untrusted binaries.
 - Validate inputs rigorously and cap execution time within your server.
-- For cross‑platform use, prefer portable commands, or provide per‑OS scripts.
-- Returning both `content` (user‑friendly) and `structuredContent` (machine‑friendly) helps downstream UIs.
+- For cross-platform use, prefer portable commands, or provide per-OS scripts.
+- Returning both `content` (user-friendly) and `structuredContent` (machine-friendly) helps downstream UIs.
 
