@@ -1,5 +1,6 @@
 [workspace]
 members = [
+    "ai",
     "ansi-escape",
     "apply-patch",
     "arg0",
