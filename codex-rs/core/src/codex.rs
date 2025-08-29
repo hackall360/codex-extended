@@ -2642,11 +2642,6 @@ async fn handle_sandbox_error(
 
     match rx_approve.await.unwrap_or_default() {
         ReviewDecision::Approved | ReviewDecision::ApprovedForSession => {
-            // Persist this command as pre‑approved for the
-            // remainder of the session so future
-            // executions skip the sandbox directly.
-            // TODO(ragona): Isn't this a bug? It always saves the command in an | fork?
-            sess.add_approved_command(params.command.clone());
             // Inform UI we are retrying without sandbox.
             sess.notify_background_event(&sub_id, "retrying command without sandbox")
                 .await;
@@ -2658,7 +2653,7 @@ async fn handle_sandbox_error(
                     turn_diff_tracker,
                     exec_command_context.clone(),
                     ExecInvokeArgs {
-                        params,
+                        params: params.clone(),
                         sandbox_type: SandboxType::None,
                         sandbox_policy: &turn_context.sandbox_policy,
                         codex_linux_sandbox_exe: &sess.codex_linux_sandbox_exe,
@@ -2677,6 +2672,10 @@ async fn handle_sandbox_error(
 
             match retry_output_result {
                 Ok(retry_output) => {
+                    // Persist this command as pre‑approved for the
+                    // remainder of the session so future executions skip the sandbox directly.
+                    sess.add_approved_command(params.command.clone());
+
                     let ExecToolCallOutput { exit_code, .. } = &retry_output;
 
                     let is_success = *exit_code == 0;
@@ -2952,11 +2951,17 @@ fn convert_call_tool_result_to_function_call_output_payload(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::config::{Config, ConfigOverrides, ConfigToml};
+    use codex_login::{AuthManager, CodexAuth};
     use mcp_types::ContentBlock;
     use mcp_types::TextContent;
     use pretty_assertions::assert_eq;
     use serde_json::json;
+    use std::collections::HashMap;
+    use std::sync::Arc;
     use std::time::Duration as StdDuration;
+    use tempfile::{TempDir, tempdir};
+    use tokio::time;
 
     fn text_block(s: &str) -> ContentBlock {
         ContentBlock::TextContent(TextContent {
@@ -2964,6 +2969,15 @@ mod tests {
             text: s.to_string(),
             r#type: "text".to_string(),
         })
+    }
+
+    fn load_default_config_for_test(codex_home: &TempDir) -> Config {
+        Config::load_from_base_config_with_overrides(
+            ConfigToml::default(),
+            ConfigOverrides::default(),
+            codex_home.path().to_path_buf(),
+        )
+        .expect("defaults for test should always succeed")
     }
 
     #[test]
@@ -3117,5 +3131,151 @@ mod tests {
         };
 
         assert_eq!(expected, got);
+    }
+
+    #[tokio::test]
+    async fn retry_failure_does_not_preapprove_command() {
+        let codex_home = tempdir().unwrap();
+        let mut config = load_default_config_for_test(&codex_home);
+        config.approval_policy = AskForApproval::OnFailure;
+        let config = Arc::new(config);
+        let auth = CodexAuth::create_dummy_chatgpt_auth_for_testing();
+        let auth_manager = AuthManager::from_auth_for_testing(auth);
+        let (tx_event, _rx_event) = async_channel::unbounded();
+        let configure_session = ConfigureSession {
+            provider: config.model_provider.clone(),
+            model: config.model.clone(),
+            model_reasoning_effort: ReasoningEffortConfig::default(),
+            model_reasoning_summary: ReasoningSummaryConfig::default(),
+            user_instructions: config.user_instructions.clone(),
+            base_instructions: config.base_instructions.clone(),
+            approval_policy: config.approval_policy,
+            sandbox_policy: config.sandbox_policy.clone(),
+            disable_response_storage: config.disable_response_storage,
+            notify: config.notify.clone(),
+            cwd: config.cwd.clone(),
+            resume_path: None,
+        };
+        let (sess, turn_context) = Session::new(
+            configure_session,
+            config.clone(),
+            auth_manager,
+            tx_event,
+            None,
+        )
+        .await
+        .unwrap();
+
+        let params = ExecParams {
+            command: vec!["nonexistent-cmd".to_string()],
+            cwd: turn_context.cwd.clone(),
+            timeout_ms: None,
+            env: HashMap::new(),
+            with_escalated_permissions: None,
+            justification: None,
+        };
+        let exec_command_context = ExecCommandContext {
+            sub_id: "sub".to_string(),
+            call_id: "call".to_string(),
+            command_for_display: params.command.clone(),
+            cwd: params.cwd.clone(),
+            apply_patch: None,
+        };
+        let mut tracker = TurnDiffTracker::new();
+
+        let sess_clone = sess.clone();
+        tokio::spawn({
+            let sub_id = exec_command_context.sub_id.clone();
+            async move {
+                time::sleep(StdDuration::from_millis(10)).await;
+                sess_clone.notify_approval(&sub_id, ReviewDecision::Approved);
+            }
+        });
+
+        let _ = handle_sandbox_error(
+            &mut tracker,
+            params.clone(),
+            exec_command_context.clone(),
+            SandboxErr::Denied(1, String::new(), String::new()),
+            SandboxType::LinuxSeccomp,
+            &sess,
+            &turn_context,
+        )
+        .await;
+
+        assert!(sess.state.lock_unchecked().approved_commands.is_empty());
+    }
+
+    #[tokio::test]
+    async fn user_denied_retry_does_not_preapprove_command() {
+        let codex_home = tempdir().unwrap();
+        let mut config = load_default_config_for_test(&codex_home);
+        config.approval_policy = AskForApproval::OnFailure;
+        let config = Arc::new(config);
+        let auth = CodexAuth::create_dummy_chatgpt_auth_for_testing();
+        let auth_manager = AuthManager::from_auth_for_testing(auth);
+        let (tx_event, _rx_event) = async_channel::unbounded();
+        let configure_session = ConfigureSession {
+            provider: config.model_provider.clone(),
+            model: config.model.clone(),
+            model_reasoning_effort: ReasoningEffortConfig::default(),
+            model_reasoning_summary: ReasoningSummaryConfig::default(),
+            user_instructions: config.user_instructions.clone(),
+            base_instructions: config.base_instructions.clone(),
+            approval_policy: config.approval_policy,
+            sandbox_policy: config.sandbox_policy.clone(),
+            disable_response_storage: config.disable_response_storage,
+            notify: config.notify.clone(),
+            cwd: config.cwd.clone(),
+            resume_path: None,
+        };
+        let (sess, turn_context) = Session::new(
+            configure_session,
+            config.clone(),
+            auth_manager,
+            tx_event,
+            None,
+        )
+        .await
+        .unwrap();
+
+        let params = ExecParams {
+            command: vec!["nonexistent-cmd".to_string()],
+            cwd: turn_context.cwd.clone(),
+            timeout_ms: None,
+            env: HashMap::new(),
+            with_escalated_permissions: None,
+            justification: None,
+        };
+        let exec_command_context = ExecCommandContext {
+            sub_id: "sub".to_string(),
+            call_id: "call".to_string(),
+            command_for_display: params.command.clone(),
+            cwd: params.cwd.clone(),
+            apply_patch: None,
+        };
+        let mut tracker = TurnDiffTracker::new();
+
+        let sess_clone = sess.clone();
+        tokio::spawn({
+            let sub_id = exec_command_context.sub_id.clone();
+            async move {
+                time::sleep(StdDuration::from_millis(10)).await;
+                sess_clone.notify_approval(&sub_id, ReviewDecision::Denied);
+            }
+        });
+
+        let _ = handle_sandbox_error(
+            &mut tracker,
+            params,
+            exec_command_context,
+            SandboxErr::Denied(1, String::new(), String::new()),
+            SandboxType::LinuxSeccomp,
+            &sess,
+            &turn_context,
+        )
+        .await;
+
+        assert!(sess.state.lock_unchecked().approved_commands.is_empty());
     }
 }
