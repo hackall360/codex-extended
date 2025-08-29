@@ -57,23 +57,22 @@ pub fn assess_patch_safety_with_mode(
     }
 
     match policy {
-        AskForApproval::OnFailure | AskForApproval::Never | AskForApproval::OnRequest => {
+        AskForApproval::OnFailure
+        | AskForApproval::Never
+        | AskForApproval::OnRequest
+        | AskForApproval::UnlessTrusted => {
             // Continue to see if this can be auto-approved.
         }
-        // TODO(ragona): I'm not sure this is actually correct? I believe in this case
-        // we want to continue to the writable paths check before asking the user.
-        AskForApproval::UnlessTrusted => {
-            return SafetyCheck::AskUser;
-        }
     }
+
+    let patch_is_constrained =
+        is_write_patch_constrained_to_writable_paths(action, sandbox_policy, cwd);
 
     // Even though the patch *appears* to be constrained to writable paths, it
     // is possible that paths in the patch are hard links to files outside the
     // writable roots, so we should still run `apply_patch` in a sandbox in that
     // case.
-    if is_write_patch_constrained_to_writable_paths(action, sandbox_policy, cwd)
-        || policy == AskForApproval::OnFailure
-    {
+    if patch_is_constrained || policy == AskForApproval::OnFailure {
         // Only auto‑approve when we can actually enforce a sandbox. Otherwise
         // fall back to asking the user because the patch may touch arbitrary
         // paths outside the project.
@@ -376,6 +375,57 @@ mod tests {
         );
 
         assert_eq!(safety_check, SafetyCheck::AskUser);
+    }
+
+    #[test]
+    fn trusted_patch_auto_approves_with_unless_trusted_policy() {
+        let tmp = TempDir::new().unwrap();
+        let cwd = tmp.path().to_path_buf();
+
+        let patch_inside =
+            ApplyPatchAction::new_add_for_test(&cwd.join("inner.txt"), "".to_string());
+
+        let sandbox_policy = SandboxPolicy::WorkspaceWrite {
+            writable_roots: vec![],
+            network_access: false,
+            exclude_tmpdir_env_var: true,
+            exclude_slash_tmp: true,
+        };
+
+        let result = assess_patch_safety(
+            &patch_inside,
+            AskForApproval::UnlessTrusted,
+            &sandbox_policy,
+            &cwd,
+        );
+
+        assert!(matches!(result, SafetyCheck::AutoApprove { .. }));
+    }
+
+    #[test]
+    fn untrusted_patch_prompts_with_unless_trusted_policy() {
+        let tmp = TempDir::new().unwrap();
+        let cwd = tmp.path().to_path_buf();
+        let parent = cwd.parent().unwrap().to_path_buf();
+
+        let patch_outside =
+            ApplyPatchAction::new_add_for_test(&parent.join("outside.txt"), "".to_string());
+
+        let sandbox_policy = SandboxPolicy::WorkspaceWrite {
+            writable_roots: vec![],
+            network_access: false,
+            exclude_tmpdir_env_var: true,
+            exclude_slash_tmp: true,
+        };
+
+        let result = assess_patch_safety(
+            &patch_outside,
+            AskForApproval::UnlessTrusted,
+            &sandbox_policy,
+            &cwd,
+        );
+
+        assert_eq!(result, SafetyCheck::AskUser);
     }
 
     #[test]
