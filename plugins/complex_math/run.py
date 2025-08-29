@@ -13,8 +13,16 @@ if not os.path.exists(VENV_DIR):
         pip_cmd = os.path.join(VENV_DIR, 'Scripts', 'pip.exe')
     else:
         pip_cmd = os.path.join(VENV_DIR, 'bin', 'pip')
-    subprocess.check_call([pip_cmd, 'install', '--upgrade', 'pip'])
-    subprocess.check_call([pip_cmd, 'install', '-r', os.path.join(HERE, 'requirements.txt')])
+    subprocess.check_call(
+        [pip_cmd, 'install', '--upgrade', 'pip'],
+        stdout=sys.stderr,
+        stderr=sys.stderr,
+    )
+    subprocess.check_call(
+        [pip_cmd, 'install', '-r', os.path.join(HERE, 'requirements.txt')],
+        stdout=sys.stderr,
+        stderr=sys.stderr,
+    )
 
 if os.name == 'nt':
     python = os.path.join(VENV_DIR, 'Scripts', 'python.exe')
