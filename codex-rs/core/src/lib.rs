@@ -13,6 +13,7 @@ mod client_common;
 pub mod codex;
 mod codex_conversation;
 pub use codex_conversation::CodexConversation;
+pub mod autogen;
 pub mod config;
 pub mod config_profile;
 pub mod config_types;
