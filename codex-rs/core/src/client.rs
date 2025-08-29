@@ -63,9 +63,9 @@ struct Error {
 #[derive(Debug, Clone)]
 pub struct ModelClient {
     config: Arc<Config>,
-    auth_manager: Option<Arc<AuthManager>>,
-    client: reqwest::Client,
-    provider: ModelProviderInfo,
+    pub(crate) auth_manager: Option<Arc<AuthManager>>,
+    pub(crate) client: reqwest::Client,
+    pub(crate) provider: ModelProviderInfo,
     session_id: Uuid,
     effort: ReasoningEffortConfig,
     summary: ReasoningSummaryConfig,
