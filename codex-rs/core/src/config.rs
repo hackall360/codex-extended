@@ -1,8 +1,10 @@
 use crate::config_profile::ConfigProfile;
+use crate::config_types::AgentConfigEntry;
 use crate::config_types::CommandTimeoutMs;
 use crate::config_types::EditMode;
 use crate::config_types::History;
 use crate::config_types::McpServerConfig;
+use crate::config_types::ModelRole;
 use crate::config_types::SandboxWorkspaceWrite;
 use crate::config_types::ShellEnvironmentPolicy;
 use crate::config_types::ShellEnvironmentPolicyToml;
@@ -120,6 +122,12 @@ pub struct Config {
 
     /// Combined provider map (defaults merged with user-defined overrides).
     pub model_providers: HashMap<String, ModelProviderInfo>,
+
+    /// Named model roles that can be assigned to agents.
+    pub model_roles: HashMap<String, ModelRole>,
+
+    /// Configured agents for orchestration.
+    pub agents: Vec<AgentConfigEntry>,
 
     /// Maximum number of bytes to include from an AGENTS.md project doc file.
     pub project_doc_max_bytes: usize,
@@ -455,6 +463,14 @@ pub struct ConfigToml {
     #[serde(default)]
     pub model_providers: HashMap<String, ModelProviderInfo>,
 
+    /// User-defined model roles for specialized tasks.
+    #[serde(default)]
+    pub model_roles: Option<HashMap<String, ModelRole>>,
+
+    /// Configurable agents participating in orchestration.
+    #[serde(default)]
+    pub agents: Option<Vec<AgentConfigEntry>>,
+
     /// Maximum number of bytes to include from an AGENTS.md project doc file.
     pub project_doc_max_bytes: Option<usize>,
 
@@ -727,6 +743,9 @@ impl Config {
             model_providers.entry(key).or_insert(provider);
         }
 
+        let model_roles = cfg.model_roles.unwrap_or_default();
+        let agents = cfg.agents.unwrap_or_default();
+
         let model_provider_id = model_provider
             .or(config_profile.model_provider)
             .or(cfg.model_provider)
@@ -929,6 +948,8 @@ impl Config {
             base_instructions,
             mcp_servers: discovered_mcp_servers,
             model_providers,
+            model_roles,
+            agents,
             project_doc_max_bytes: cfg.project_doc_max_bytes.unwrap_or(PROJECT_DOC_MAX_BYTES),
             codex_home,
             history,
@@ -1317,6 +1338,8 @@ disable_response_storage = true
                 cwd: fixture.cwd(),
                 mcp_servers: HashMap::new(),
                 model_providers: fixture.model_provider_map.clone(),
+                model_roles: HashMap::new(),
+                agents: Vec::new(),
                 project_doc_max_bytes: PROJECT_DOC_MAX_BYTES,
                 codex_home: fixture.codex_home(),
                 history: History::default(),
@@ -1376,6 +1399,8 @@ disable_response_storage = true
             cwd: fixture.cwd(),
             mcp_servers: HashMap::new(),
             model_providers: fixture.model_provider_map.clone(),
+            model_roles: HashMap::new(),
+            agents: Vec::new(),
             project_doc_max_bytes: PROJECT_DOC_MAX_BYTES,
             codex_home: fixture.codex_home(),
             history: History::default(),
@@ -1450,6 +1475,8 @@ disable_response_storage = true
             cwd: fixture.cwd(),
             mcp_servers: HashMap::new(),
             model_providers: fixture.model_provider_map.clone(),
+            model_roles: HashMap::new(),
+            agents: Vec::new(),
             project_doc_max_bytes: PROJECT_DOC_MAX_BYTES,
             codex_home: fixture.codex_home(),
             history: History::default(),

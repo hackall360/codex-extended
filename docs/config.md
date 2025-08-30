@@ -747,3 +747,26 @@ auto_compact_tolerance_percent = 8
 | `projects.<path>.trust_level`                    | string             | Mark project/worktree as trusted (only `"trusted"` is recognized).                         |
 | `preferred_auth_method`                          | `chatgpt`          | `apikey`                                                                                   | Select default auth method (default: `chatgpt`). |
 | `tools.web_search`                               | boolean            | Enable web search tool (alias: `web_search_request`) (default: false).                     |
+
+## model_roles
+
+Defines reusable model configurations that can be referenced by agents. Each entry maps a role name to a `model` and optional `provider`.
+
+```toml
+[model_roles]
+planner = { model = "gpt-4o-mini", provider = "openai" }
+coder = { model = "o3-mini" }
+```
+
+## agents
+
+Lists the agents participating in orchestration. Each `[[agents]]` entry must specify a `name` and may reference a `model_role` from the `[model_roles]` table.
+
+```toml
+[model_roles]
+planner = { model = "gpt-4o-mini" }
+
+[[agents]]
+name = "manager"
+model_role = "planner"
+```

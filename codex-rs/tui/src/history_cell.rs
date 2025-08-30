@@ -923,11 +923,21 @@ pub(crate) fn new_plan_update(update: UpdatePlanArgs) -> PlainHistoryCell {
     // Leading blank for separation
     lines.push(Line::from(""));
     // Header with progress summary
-    let total = plan.len();
-    let completed = plan
-        .iter()
-        .filter(|p| matches!(p.status, StepStatus::Completed))
-        .count();
+    fn count(plan: &[PlanItemArg]) -> (usize, usize) {
+        let mut total = 0;
+        let mut completed = 0;
+        for item in plan {
+            total += 1;
+            if matches!(item.status, StepStatus::Completed) {
+                completed += 1;
+            }
+            let (t, c) = count(&item.sub_steps);
+            total += t;
+            completed += c;
+        }
+        (total, completed)
+    }
+    let (total, completed) = count(&plan);
 
     let width: usize = 10;
     let filled = if total > 0 {
@@ -975,41 +985,43 @@ pub(crate) fn new_plan_update(update: UpdatePlanArgs) -> PlainHistoryCell {
     if plan.is_empty() {
         lines.push(Line::from("(no steps provided)".dim().italic()));
     } else {
-        for (idx, PlanItemArg { step, status }) in plan.into_iter().enumerate() {
-            let (box_span, text_span) = match status {
-                StepStatus::Completed => (
-                    Span::styled("✔", Style::default().fg(Color::Green)),
-                    Span::styled(
-                        step,
-                        Style::default().add_modifier(Modifier::CROSSED_OUT | Modifier::DIM),
+        fn render(plan: Vec<PlanItemArg>, indent: usize, lines: &mut Vec<Line<'static>>) {
+            for item in plan {
+                let (box_span, text_span) = match item.status {
+                    StepStatus::Completed => (
+                        Span::styled("✔", Style::default().fg(Color::Green)),
+                        Span::styled(
+                            item.step,
+                            Style::default().add_modifier(Modifier::CROSSED_OUT | Modifier::DIM),
+                        ),
                     ),
-                ),
-                StepStatus::InProgress => (
-                    Span::raw("□"),
-                    Span::styled(
-                        step,
-                        Style::default()
-                            .fg(Color::Cyan)
-                            .add_modifier(Modifier::BOLD),
+                    StepStatus::InProgress => (
+                        Span::raw("□"),
+                        Span::styled(
+                            item.step,
+                            Style::default()
+                                .fg(Color::Cyan)
+                                .add_modifier(Modifier::BOLD),
+                        ),
                     ),
-                ),
-                StepStatus::Pending => (
-                    Span::raw("□"),
-                    Span::styled(step, Style::default().add_modifier(Modifier::DIM)),
-                ),
-            };
-            let prefix = if idx == 0 {
-                Span::raw("  └ ")
-            } else {
-                Span::raw("    ")
-            };
-            lines.push(Line::from(vec![
-                prefix,
-                box_span,
-                Span::raw(" "),
-                text_span,
-            ]));
+                    StepStatus::Pending => (
+                        Span::raw("□"),
+                        Span::styled(item.step, Style::default().add_modifier(Modifier::DIM)),
+                    ),
+                };
+                let prefix = Span::raw(format!("{}- ", "  ".repeat(indent)));
+                lines.push(Line::from(vec![
+                    prefix,
+                    box_span,
+                    Span::raw(" "),
+                    text_span,
+                ]));
+                if !item.sub_steps.is_empty() {
+                    render(item.sub_steps, indent + 1, lines);
+                }
+            }
         }
+        render(plan, 0, &mut lines);
     }
 
     PlainHistoryCell { lines }

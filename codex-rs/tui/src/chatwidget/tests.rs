@@ -1218,14 +1218,17 @@ fn plan_update_renders_history_cell() {
             PlanItemArg {
                 step: "Explore codebase".into(),
                 status: StepStatus::Completed,
+                sub_steps: vec![],
             },
             PlanItemArg {
                 step: "Implement feature".into(),
                 status: StepStatus::InProgress,
+                sub_steps: vec![],
             },
             PlanItemArg {
                 step: "Write tests".into(),
                 status: StepStatus::Pending,
+                sub_steps: vec![],
             },
         ],
     };

@@ -22,6 +22,20 @@ pub struct McpServerConfig {
     pub env: Option<HashMap<String, String>>,
 }
 
+#[derive(Deserialize, Debug, Clone, PartialEq)]
+pub struct ModelRole {
+    pub model: String,
+    #[serde(default)]
+    pub provider: Option<String>,
+}
+
+#[derive(Deserialize, Debug, Clone, PartialEq)]
+pub struct AgentConfigEntry {
+    pub name: String,
+    #[serde(default)]
+    pub model_role: Option<String>,
+}
+
 #[derive(Deserialize, Debug, Copy, Clone, PartialEq)]
 pub enum UriBasedFileOpener {
     #[serde(rename = "vscode")]
