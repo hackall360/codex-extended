@@ -71,6 +71,7 @@ tree-sitter-bash = "0.25.0"
 uuid = { version = "1", features = ["serde", "v4"] }
 whoami = "1.6.1"
 wildmatch = "2.4.0"
+async-trait = "0.1"
 
 # Optional speech dependencies for the offline voice stack.
 kokoro-tts = { version = "0.2.8", optional = true }
