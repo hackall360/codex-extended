@@ -897,6 +897,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "codex-bridge"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "codex-common",
+ "codex-core",
+ "codex-login",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "codex-chatgpt"
 version = "0.0.0"
 dependencies = [

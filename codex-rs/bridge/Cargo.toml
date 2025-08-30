@@ -1,0 +1,26 @@
+[package]
+name = "codex-bridge"
+version.workspace = true
+edition.workspace = true
+
+[[bin]]
+name = "codex-server"
+path = "src/server.rs"
+
+[[bin]]
+name = "codex-client"
+path = "src/client.rs"
+
+[dependencies]
+anyhow = "1"
+clap = { version = "4", features = ["derive"] }
+codex-common = { path = "../common", features = ["cli"] }
+codex-core = { path = "../core" }
+codex-login = { path = "../login" }
+serde_json = "1"
+tokio = { version = "1", features = ["io-std", "macros", "net", "rt-multi-thread", "signal"] }
+tracing = "0.1.41"
+tracing-subscriber = "0.3.19"
+
+[lints]
+workspace = true
