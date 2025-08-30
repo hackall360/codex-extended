@@ -91,6 +91,11 @@ pub enum CodexErr {
     #[error("internal error; agent loop died unexpectedly")]
     InternalAgentDied,
 
+    /// Returned when a model provider declares a custom wire protocol but no
+    /// adapter was supplied when constructing the [`ModelClient`].
+    #[error("no model adapter registered for provider")]
+    NoModelAdapter,
+
     /// Sandbox error
     #[error("sandbox error: {0}")]
     Sandbox(#[from] SandboxErr),

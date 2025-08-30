@@ -41,10 +41,12 @@ impl ModelClient {
     /// Transcribe audio bytes to text using OpenAI's Whisper model.
     pub async fn transcribe_audio(&self, audio: &[u8], mime_type: &str) -> Result<String> {
         let auth_mode = self.auth_manager.as_ref().and_then(|m| m.auth());
-        let builder = self
+        let provider = self
             .provider
             .lock()
-            .unwrap()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone();
+        let builder = provider
             .create_request_builder_for_path(&self.client, &auth_mode, "/audio/transcriptions")
             .await?;
 
@@ -71,10 +73,12 @@ impl ModelClient {
     /// Convert text to spoken audio using GPT-4o TTS models.
     pub async fn synthesize_speech(&self, text: &str, voice: &str) -> Result<Vec<u8>> {
         let auth_mode = self.auth_manager.as_ref().and_then(|m| m.auth());
-        let builder = self
+        let provider = self
             .provider
             .lock()
-            .unwrap()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone();
+        let builder = provider
             .create_request_builder_for_path(&self.client, &auth_mode, "/audio/speech")
             .await?;
         let payload = json!({

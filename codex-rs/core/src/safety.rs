@@ -19,6 +19,7 @@ pub enum SafetyCheck {
     Reject { reason: String },
 }
 
+#[allow(dead_code)]
 pub fn assess_patch_safety(
     action: &ApplyPatchAction,
     policy: AskForApproval,
@@ -96,6 +97,7 @@ pub fn assess_patch_safety_with_mode(
 /// - the user has explicitly approved the command
 /// - the command is on the "known safe" list
 /// - `DangerFullAccess` was specified and `UnlessTrusted` was not
+#[allow(dead_code)]
 pub fn assess_command_safety(
     command: &[String],
     approval_policy: AskForApproval,

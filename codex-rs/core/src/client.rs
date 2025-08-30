@@ -32,6 +32,7 @@ use crate::error::CodexErr;
 use crate::error::Result;
 use crate::error::UsageLimitReachedError;
 use crate::flags::CODEX_RS_SSE_FIXTURE;
+use crate::model_adapter::ModelAdapter;
 use crate::model_family::ModelFamily;
 use crate::model_provider_info::ModelProviderInfo;
 use crate::model_provider_info::WireApi;
@@ -43,7 +44,8 @@ use crate::util::backoff;
 use codex_protocol::config_types::ReasoningEffort as ReasoningEffortConfig;
 use codex_protocol::config_types::ReasoningSummary as ReasoningSummaryConfig;
 use codex_protocol::models::ResponseItem;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
+use std::sync::Mutex;
 
 #[derive(Debug, Deserialize)]
 struct ErrorResponse {
@@ -69,6 +71,7 @@ pub struct ModelClient {
     session_id: Uuid,
     effort: ReasoningEffortConfig,
     summary: ReasoningSummaryConfig,
+    adapter: Option<Arc<dyn ModelAdapter>>,
 }
 
 impl ModelClient {
@@ -80,14 +83,35 @@ impl ModelClient {
         summary: ReasoningSummaryConfig,
         session_id: Uuid,
     ) -> Self {
+        Self::new_with_adapter(
+            config,
+            auth_manager,
+            provider,
+            effort,
+            summary,
+            session_id,
+            None,
+        )
+    }
+
+    pub fn new_with_adapter(
+        config: Arc<Config>,
+        auth_manager: Option<Arc<AuthManager>>,
+        provider: ModelProviderInfo,
+        effort: ReasoningEffortConfig,
+        summary: ReasoningSummaryConfig,
+        session_id: Uuid,
+        adapter: Option<Arc<dyn ModelAdapter>>,
+    ) -> Self {
         Self {
             config,
             auth_manager,
             client: reqwest::Client::new(),
-        provider: Arc::new(Mutex::new(provider)),
+            provider: Arc::new(Mutex::new(provider)),
             session_id,
             effort,
             summary,
+            adapter,
         }
     }
 
@@ -105,11 +129,20 @@ impl ModelClient {
     /// the provider config.  Public callers always invoke `stream()` – the
     /// specialised helpers are private to avoid accidental misuse.
     pub async fn stream(&self, prompt: &Prompt) -> Result<ResponseStream> {
-        let wire_api = { self.provider.lock().unwrap().wire_api };
+        let wire_api = {
+            self.provider
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .wire_api
+        };
         match wire_api {
             WireApi::Responses => self.stream_responses(prompt).await,
             WireApi::Chat => {
-                let provider = self.provider.lock().unwrap().clone();
+                let provider = self
+                    .provider
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .clone();
                 // Create the raw streaming connection first.
                 let response_stream = stream_chat_completions(
                     prompt,
@@ -144,12 +177,27 @@ impl ModelClient {
 
                 Ok(ResponseStream { rx_event: rx })
             }
+            WireApi::Custom => {
+                let adapter = self.adapter.as_ref().ok_or(CodexErr::NoModelAdapter)?;
+                let provider = self
+                    .provider
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .clone();
+                adapter
+                    .stream(prompt, &self.config.model_family, &self.client, &provider)
+                    .await
+            }
         }
     }
 
     /// Implementation for the OpenAI *Responses* experimental API.
     async fn stream_responses(&self, prompt: &Prompt) -> Result<ResponseStream> {
-        let provider = self.provider.lock().unwrap().clone();
+        let provider = self
+            .provider
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone();
         if let Some(path) = &*CODEX_RS_SSE_FIXTURE {
             // short circuit for tests
             warn!(path, "Streaming from fixture");
@@ -241,9 +289,7 @@ impl ModelClient {
                 serde_json::to_string(&payload)?
             );
 
-        let mut req_builder = provider
-            .create_request_builder(&self.client, &auth)
-            .await?;
+            let mut req_builder = provider.create_request_builder(&self.client, &auth).await?;
 
             req_builder = req_builder
                 .header("OpenAI-Beta", "responses=experimental")
@@ -367,7 +413,10 @@ impl ModelClient {
     }
 
     pub fn get_provider(&self) -> ModelProviderInfo {
-        self.provider.lock().unwrap().clone()
+        self.provider
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone()
     }
 
     /// Returns the currently configured model slug.
@@ -397,12 +446,18 @@ impl ModelClient {
     /// Rotate to the next API key for the current provider. Returns `true`
     /// if a rotation occurred.
     pub fn rotate_api_key(&self) -> bool {
-        self.provider.lock().unwrap().rotate_api_key()
+        self.provider
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .rotate_api_key()
     }
 
     /// Reset provider API key rotation back to the first key.
     pub fn reset_api_key_rotation(&self) {
-        self.provider.lock().unwrap().reset_api_key_rotation();
+        self.provider
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .reset_api_key_rotation();
     }
 }
 

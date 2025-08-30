@@ -37,6 +37,12 @@ pub enum WireApi {
     /// Regular Chat Completions compatible with `/v1/chat/completions`.
     #[default]
     Chat,
+
+    /// A user supplied [`ModelAdapter`] implementation. Providers that set
+    /// this require an adapter to be injected when constructing the
+    /// [`ModelClient`].
+    #[serde(rename = "custom")]
+    Custom,
 }
 
 /// Serializable representation of a provider definition.
@@ -214,6 +220,7 @@ impl ModelProviderInfo {
         match self.wire_api {
             WireApi::Responses => format!("{base_url}/responses{query_string}"),
             WireApi::Chat => format!("{base_url}/chat/completions{query_string}"),
+            WireApi::Custom => format!("{base_url}{query_string}"),
         }
     }
 
@@ -282,11 +289,11 @@ impl ModelProviderInfo {
     /// Advance to the next API key in `api_keys`. Returns `true` if rotation
     /// occurred and `false` otherwise (e.g. zero or one key configured).
     pub fn rotate_api_key(&mut self) -> bool {
-        if let Some(keys) = &self.api_keys {
-            if keys.len() > 1 {
-                self.api_key_index = (self.api_key_index + 1) % keys.len();
-                return true;
-            }
+        if let Some(keys) = &self.api_keys
+            && keys.len() > 1
+        {
+            self.api_key_index = (self.api_key_index + 1) % keys.len();
+            return true;
         }
         false
     }

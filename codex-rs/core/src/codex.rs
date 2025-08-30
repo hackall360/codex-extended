@@ -2951,8 +2951,11 @@ fn convert_call_tool_result_to_function_call_output_payload(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::{Config, ConfigOverrides, ConfigToml};
-    use codex_login::{AuthManager, CodexAuth};
+    use crate::config::Config;
+    use crate::config::ConfigOverrides;
+    use crate::config::ConfigToml;
+    use codex_login::AuthManager;
+    use codex_login::CodexAuth;
     use mcp_types::ContentBlock;
     use mcp_types::TextContent;
     use pretty_assertions::assert_eq;
@@ -2960,7 +2963,8 @@ mod tests {
     use std::collections::HashMap;
     use std::sync::Arc;
     use std::time::Duration as StdDuration;
-    use tempfile::{TempDir, tempdir};
+    use tempfile::TempDir;
+    use tempfile::tempdir;
     use tokio::time;
 
     fn text_block(s: &str) -> ContentBlock {
