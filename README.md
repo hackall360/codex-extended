@@ -55,6 +55,7 @@ codex exec --edit-mode trusted "update CHANGELOG and open a PR"
 ```
 
 Safety guidance:
+
 - Prefer running in a VM or container when using `--edit-mode trusted`.
 - Pair with `--sandbox workspace-write` for guardrails. If you need `--sandbox danger-full-access`, only do so inside an isolated environment.
 - You can control command timeouts via `-c command_timeout_ms=120000` or disable with `-c command_timeout_ms=\"none\"`.
@@ -73,6 +74,9 @@ You can also use Codex with an API key, but this requires [additional setup](./d
 
 Codex CLI supports [MCP servers](./docs/advanced.md#model-context-protocol-mcp). Enable by adding an `mcp_servers` section to your `~/.codex/config.toml`.
 
+### Remote server/client mode
+
+Codex also includes a lightweight TCP server and client that let you run the agent on one machine and drive it from another. Launch the server with `cargo run -p codex-server` (or the `codex-server` binary) and connect using `cargo run -p codex-client` or the `codex-client` binary. The server boots the same `ConversationManager` used by the CLI, so plugins, MCP servers and other runtime features remain available when Codex runs in this remote mode.
 
 ### Configuration
 
@@ -110,4 +114,3 @@ Codex CLI supports a rich set of configuration options, with preferences stored 
 ## License
 
 This repository is licensed under the [Apache-2.0 License](LICENSE).
-
