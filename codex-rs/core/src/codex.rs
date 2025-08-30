@@ -62,6 +62,7 @@ use crate::exec_command::ExecSessionManager;
 use crate::exec_command::WRITE_STDIN_TOOL_NAME;
 use crate::exec_command::WriteStdinParams;
 use crate::exec_env::create_env;
+use crate::math_tools;
 use crate::mcp_connection_manager::McpConnectionManager;
 use crate::mcp_tool_call::handle_mcp_tool_call;
 use crate::model_family::find_family_for_model;
@@ -2149,6 +2150,111 @@ async fn handle_function_call(
                 call_id,
             )
             .await
+        }
+        "calculate" => {
+            #[derive(serde::Deserialize)]
+            struct CalculateArgs {
+                expr: String,
+            }
+            let args = match serde_json::from_str::<CalculateArgs>(&arguments) {
+                Ok(a) => a,
+                Err(e) => {
+                    return ResponseInputItem::FunctionCallOutput {
+                        call_id,
+                        output: FunctionCallOutputPayload {
+                            content: format!("failed to parse function arguments: {e}"),
+                            success: Some(false),
+                        },
+                    };
+                }
+            };
+            match math_tools::evaluate_expression(&args.expr) {
+                Ok(val) => ResponseInputItem::FunctionCallOutput {
+                    call_id,
+                    output: FunctionCallOutputPayload {
+                        content: format!("result: {val}"),
+                        success: Some(true),
+                    },
+                },
+                Err(e) => ResponseInputItem::FunctionCallOutput {
+                    call_id,
+                    output: FunctionCallOutputPayload {
+                        content: format!("error: {e}"),
+                        success: Some(false),
+                    },
+                },
+            }
+        }
+        "quadratic_solve" => {
+            #[derive(serde::Deserialize)]
+            struct QuadraticArgs {
+                a: f64,
+                b: f64,
+                c: f64,
+            }
+            let args = match serde_json::from_str::<QuadraticArgs>(&arguments) {
+                Ok(a) => a,
+                Err(e) => {
+                    return ResponseInputItem::FunctionCallOutput {
+                        call_id,
+                        output: FunctionCallOutputPayload {
+                            content: format!("failed to parse function arguments: {e}"),
+                            success: Some(false),
+                        },
+                    };
+                }
+            };
+            if args.a == 0.0 {
+                return ResponseInputItem::FunctionCallOutput {
+                    call_id,
+                    output: FunctionCallOutputPayload {
+                        content: "error: a must be non-zero".to_string(),
+                        success: Some(false),
+                    },
+                };
+            }
+            let roots = math_tools::solve_quadratic(args.a, args.b, args.c);
+            ResponseInputItem::FunctionCallOutput {
+                call_id,
+                output: FunctionCallOutputPayload {
+                    content: format!("roots: {}, {}", roots[0], roots[1]),
+                    success: Some(true),
+                },
+            }
+        }
+        "matrix_det" => {
+            #[derive(serde::Deserialize)]
+            struct MatrixArgs {
+                matrix: Vec<Vec<f64>>,
+            }
+            let args = match serde_json::from_str::<MatrixArgs>(&arguments) {
+                Ok(a) => a,
+                Err(e) => {
+                    return ResponseInputItem::FunctionCallOutput {
+                        call_id,
+                        output: FunctionCallOutputPayload {
+                            content: format!("failed to parse function arguments: {e}"),
+                            success: Some(false),
+                        },
+                    };
+                }
+            };
+            match math_tools::matrix_determinant(&args.matrix) {
+                Ok(det) => ResponseInputItem::FunctionCallOutput {
+                    call_id,
+                    output: FunctionCallOutputPayload {
+                        content: format!("determinant: {det}"),
+                        success: Some(true),
+                    },
+                },
+                Err(e) => ResponseInputItem::FunctionCallOutput {
+                    call_id,
+                    output: FunctionCallOutputPayload {
+                        content: format!("error: {e}"),
+                        success: Some(false),
+                    },
+                },
+            }
         }
         "update_plan" => handle_update_plan(sess, arguments, sub_id, call_id).await,
         EXEC_COMMAND_TOOL_NAME => {

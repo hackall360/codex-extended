@@ -33,7 +33,7 @@ npx @modelcontextprotocol/inspector codex mcp
 
 ### Remote server and client
 
-For remote workflows, the workspace includes `codex-server` and `codex-client` binaries. `codex-server` exposes a raw TCP interface that speaks the same JSON protocol used by the CLI, and `codex-client` forwards stdin to the server and prints events. Because the server spins up the full `ConversationManager`, all plugins, MCP servers, and other runtime features remain available when using Codex over the network.
+For remote workflows, the workspace includes `codex-server` and `codex-client` binaries. `codex-server` exposes a raw TCP interface that speaks the same JSON protocol used by the CLI, and `codex-client` forwards stdin to the server and prints events. Because the server spins up the full `ConversationManager`, all MCP servers and other runtime features remain available when using Codex over the network.
 
 ### Notifications
 

@@ -370,6 +370,82 @@ fn create_view_image_tool() -> OpenAiTool {
         },
     })
 }
+
+fn create_calculate_tool() -> OpenAiTool {
+    let mut properties = BTreeMap::new();
+    properties.insert(
+        "expr".to_string(),
+        JsonSchema::String {
+            description: Some("Expression to evaluate".to_string()),
+        },
+    );
+    OpenAiTool::Function(ResponsesApiTool {
+        name: "calculate".to_string(),
+        description: "Safely evaluate a mathematical expression with common functions".to_string(),
+        strict: false,
+        parameters: JsonSchema::Object {
+            properties,
+            required: Some(vec!["expr".to_string()]),
+            additional_properties: Some(false),
+        },
+    })
+}
+
+fn create_quadratic_solve_tool() -> OpenAiTool {
+    let mut properties = BTreeMap::new();
+    properties.insert(
+        "a".to_string(),
+        JsonSchema::Number {
+            description: Some("Coefficient a".to_string()),
+        },
+    );
+    properties.insert(
+        "b".to_string(),
+        JsonSchema::Number {
+            description: Some("Coefficient b".to_string()),
+        },
+    );
+    properties.insert(
+        "c".to_string(),
+        JsonSchema::Number {
+            description: Some("Coefficient c".to_string()),
+        },
+    );
+    OpenAiTool::Function(ResponsesApiTool {
+        name: "quadratic_solve".to_string(),
+        description: "Solve ax^2 + bx + c = 0".to_string(),
+        strict: false,
+        parameters: JsonSchema::Object {
+            properties,
+            required: Some(vec!["a".to_string(), "b".to_string(), "c".to_string()]),
+            additional_properties: Some(false),
+        },
+    })
+}
+
+fn create_matrix_det_tool() -> OpenAiTool {
+    let mut matrix_items = BTreeMap::new();
+    matrix_items.insert(
+        "matrix".to_string(),
+        JsonSchema::Array {
+            items: Box::new(JsonSchema::Array {
+                items: Box::new(JsonSchema::Number { description: None }),
+                description: None,
+            }),
+            description: Some("2x2 or 3x3 matrix".to_string()),
+        },
+    );
+    OpenAiTool::Function(ResponsesApiTool {
+        name: "matrix_det".to_string(),
+        description: "Compute determinant of a 2x2 or 3x3 matrix".to_string(),
+        strict: false,
+        parameters: JsonSchema::Object {
+            properties: matrix_items,
+            required: Some(vec!["matrix".to_string()]),
+            additional_properties: Some(false),
+        },
+    })
+}
 /// TODO(dylan): deprecate once we get rid of json tool
 #[derive(Serialize, Deserialize)]
 pub(crate) struct ApplyPatchToolArgs {
@@ -631,6 +707,11 @@ pub(crate) fn get_openai_tools(
         tools.push(create_view_image_tool());
     }
 
+    // Built-in math utilities migrated from plugins.
+    tools.push(create_calculate_tool());
+    tools.push(create_quadratic_solve_tool());
+    tools.push(create_matrix_det_tool());
+
     if let Some(mcp_tools) = mcp_tools {
         // Ensure deterministic ordering to maximize prompt cache hits.
         // HashMap iteration order is non-deterministic, so sort by fully-qualified tool name.
@@ -701,7 +782,15 @@ mod tests {
 
         assert_eq_tool_names(
             &tools,
-            &["local_shell", "update_plan", "web_search", "view_image"],
+            &[
+                "local_shell",
+                "update_plan",
+                "web_search",
+                "view_image",
+                "calculate",
+                "quadratic_solve",
+                "matrix_det",
+            ],
         );
     }
 
@@ -722,7 +811,15 @@ mod tests {
 
         assert_eq_tool_names(
             &tools,
-            &["shell", "update_plan", "web_search", "view_image"],
+            &[
+                "shell",
+                "update_plan",
+                "web_search",
+                "view_image",
+                "calculate",
+                "quadratic_solve",
+                "matrix_det",
+            ],
         );
     }
 
@@ -783,12 +880,15 @@ mod tests {
                 "shell",
                 "web_search",
                 "view_image",
+                "calculate",
+                "quadratic_solve",
+                "matrix_det",
                 "test_server/do_something_cool",
             ],
         );
 
         assert_eq!(
-            tools[3],
+            tools[6],
             OpenAiTool::Function(ResponsesApiTool {
                 name: "test_server/do_something_cool".to_string(),
                 parameters: JsonSchema::Object {
@@ -901,6 +1001,9 @@ mod tests {
             &[
                 "shell",
                 "view_image",
+                "calculate",
+                "quadratic_solve",
+                "matrix_det",
                 "test_server/cool",
                 "test_server/do",
                 "test_server/something",
@@ -947,11 +1050,19 @@ mod tests {
 
         assert_eq_tool_names(
             &tools,
-            &["shell", "web_search", "view_image", "dash/search"],
+            &[
+                "shell",
+                "web_search",
+                "view_image",
+                "calculate",
+                "quadratic_solve",
+                "matrix_det",
+                "dash/search",
+            ],
         );
 
         assert_eq!(
-            tools[3],
+            tools[6],
             OpenAiTool::Function(ResponsesApiTool {
                 name: "dash/search".to_string(),
                 parameters: JsonSchema::Object {
@@ -1007,10 +1118,18 @@ mod tests {
 
         assert_eq_tool_names(
             &tools,
-            &["shell", "web_search", "view_image", "dash/paginate"],
+            &[
+                "shell",
+                "web_search",
+                "view_image",
+                "calculate",
+                "quadratic_solve",
+                "matrix_det",
+                "dash/paginate",
+            ],
         );
         assert_eq!(
-            tools[3],
+            tools[6],
             OpenAiTool::Function(ResponsesApiTool {
                 name: "dash/paginate".to_string(),
                 parameters: JsonSchema::Object {
@@ -1062,9 +1181,20 @@ mod tests {
             )])),
         );
 
-        assert_eq_tool_names(&tools, &["shell", "web_search", "view_image", "dash/tags"]);
+        assert_eq_tool_names(
+            &tools,
+            &[
+                "shell",
+                "web_search",
+                "view_image",
+                "calculate",
+                "quadratic_solve",
+                "matrix_det",
+                "dash/tags",
+            ],
+        );
         assert_eq!(
-            tools[3],
+            tools[6],
             OpenAiTool::Function(ResponsesApiTool {
                 name: "dash/tags".to_string(),
                 parameters: JsonSchema::Object {
@@ -1119,9 +1249,20 @@ mod tests {
             )])),
         );
 
-        assert_eq_tool_names(&tools, &["shell", "web_search", "view_image", "dash/value"]);
+        assert_eq_tool_names(
+            &tools,
+            &[
+                "shell",
+                "web_search",
+                "view_image",
+                "calculate",
+                "quadratic_solve",
+                "matrix_det",
+                "dash/value",
+            ],
+        );
         assert_eq!(
-            tools[3],
+            tools[6],
             OpenAiTool::Function(ResponsesApiTool {
                 name: "dash/value".to_string(),
                 parameters: JsonSchema::Object {
@@ -1178,10 +1319,18 @@ mod tests {
 
         assert_eq_tool_names(
             &tools,
-            &["shell", "web_search", "view_image", "dash/object"],
+            &[
+                "shell",
+                "web_search",
+                "view_image",
+                "calculate",
+                "quadratic_solve",
+                "matrix_det",
+                "dash/object",
+            ],
         );
         assert_eq!(
-            tools[3],
+            tools[6],
             OpenAiTool::Function(ResponsesApiTool {
                 name: "dash/object".to_string(),
                 parameters: JsonSchema::Object {
