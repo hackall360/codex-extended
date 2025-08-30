@@ -6,6 +6,7 @@ use serde_json::json;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 
+use crate::complex_math::{CALCULATE_TOOL, MATRIX_DET_TOOL, QUADRATIC_SOLVE_TOOL};
 use crate::model_family::ModelFamily;
 use crate::plan_tool::PLAN_TOOL;
 use crate::protocol::AskForApproval;
@@ -631,6 +632,11 @@ pub(crate) fn get_openai_tools(
         tools.push(create_view_image_tool());
     }
 
+    // Built-in math utilities migrated from the deprecated plugin system.
+    tools.push(CALCULATE_TOOL.clone());
+    tools.push(QUADRATIC_SOLVE_TOOL.clone());
+    tools.push(MATRIX_DET_TOOL.clone());
+
     if let Some(mcp_tools) = mcp_tools {
         // Ensure deterministic ordering to maximize prompt cache hits.
         // HashMap iteration order is non-deterministic, so sort by fully-qualified tool name.
@@ -701,7 +707,15 @@ mod tests {
 
         assert_eq_tool_names(
             &tools,
-            &["local_shell", "update_plan", "web_search", "view_image"],
+            &[
+                "local_shell",
+                "update_plan",
+                "web_search",
+                "view_image",
+                "calculate",
+                "quadratic_solve",
+                "matrix_det",
+            ],
         );
     }
 
@@ -722,7 +736,15 @@ mod tests {
 
         assert_eq_tool_names(
             &tools,
-            &["shell", "update_plan", "web_search", "view_image"],
+            &[
+                "shell",
+                "update_plan",
+                "web_search",
+                "view_image",
+                "calculate",
+                "quadratic_solve",
+                "matrix_det",
+            ],
         );
     }
 
@@ -783,12 +805,15 @@ mod tests {
                 "shell",
                 "web_search",
                 "view_image",
+                "calculate",
+                "quadratic_solve",
+                "matrix_det",
                 "test_server/do_something_cool",
             ],
         );
 
         assert_eq!(
-            tools[3],
+            tools[6],
             OpenAiTool::Function(ResponsesApiTool {
                 name: "test_server/do_something_cool".to_string(),
                 parameters: JsonSchema::Object {
@@ -901,6 +926,9 @@ mod tests {
             &[
                 "shell",
                 "view_image",
+                "calculate",
+                "quadratic_solve",
+                "matrix_det",
                 "test_server/cool",
                 "test_server/do",
                 "test_server/something",
@@ -947,11 +975,19 @@ mod tests {
 
         assert_eq_tool_names(
             &tools,
-            &["shell", "web_search", "view_image", "dash/search"],
+            &[
+                "shell",
+                "web_search",
+                "view_image",
+                "calculate",
+                "quadratic_solve",
+                "matrix_det",
+                "dash/search",
+            ],
         );
 
         assert_eq!(
-            tools[3],
+            tools[6],
             OpenAiTool::Function(ResponsesApiTool {
                 name: "dash/search".to_string(),
                 parameters: JsonSchema::Object {
@@ -1007,10 +1043,18 @@ mod tests {
 
         assert_eq_tool_names(
             &tools,
-            &["shell", "web_search", "view_image", "dash/paginate"],
+            &[
+                "shell",
+                "web_search",
+                "view_image",
+                "calculate",
+                "quadratic_solve",
+                "matrix_det",
+                "dash/paginate",
+            ],
         );
         assert_eq!(
-            tools[3],
+            tools[6],
             OpenAiTool::Function(ResponsesApiTool {
                 name: "dash/paginate".to_string(),
                 parameters: JsonSchema::Object {
@@ -1062,9 +1106,20 @@ mod tests {
             )])),
         );
 
-        assert_eq_tool_names(&tools, &["shell", "web_search", "view_image", "dash/tags"]);
+        assert_eq_tool_names(
+            &tools,
+            &[
+                "shell",
+                "web_search",
+                "view_image",
+                "calculate",
+                "quadratic_solve",
+                "matrix_det",
+                "dash/tags",
+            ],
+        );
         assert_eq!(
-            tools[3],
+            tools[6],
             OpenAiTool::Function(ResponsesApiTool {
                 name: "dash/tags".to_string(),
                 parameters: JsonSchema::Object {
@@ -1119,9 +1174,20 @@ mod tests {
             )])),
         );
 
-        assert_eq_tool_names(&tools, &["shell", "web_search", "view_image", "dash/value"]);
+        assert_eq_tool_names(
+            &tools,
+            &[
+                "shell",
+                "web_search",
+                "view_image",
+                "calculate",
+                "quadratic_solve",
+                "matrix_det",
+                "dash/value",
+            ],
+        );
         assert_eq!(
-            tools[3],
+            tools[6],
             OpenAiTool::Function(ResponsesApiTool {
                 name: "dash/value".to_string(),
                 parameters: JsonSchema::Object {
@@ -1178,10 +1244,18 @@ mod tests {
 
         assert_eq_tool_names(
             &tools,
-            &["shell", "web_search", "view_image", "dash/object"],
+            &[
+                "shell",
+                "web_search",
+                "view_image",
+                "calculate",
+                "quadratic_solve",
+                "matrix_det",
+                "dash/object",
+            ],
         );
         assert_eq!(
-            tools[3],
+            tools[6],
             OpenAiTool::Function(ResponsesApiTool {
                 name: "dash/object".to_string(),
                 parameters: JsonSchema::Object {

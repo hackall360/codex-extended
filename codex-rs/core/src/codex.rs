@@ -40,6 +40,7 @@ use crate::apply_patch::convert_apply_patch_to_protocol;
 use crate::client::ModelClient;
 use crate::client_common::Prompt;
 use crate::client_common::ResponseEvent;
+use crate::complex_math::{handle_calculate, handle_matrix_det, handle_quadratic_solve};
 use crate::config::Config;
 use crate::config_types::CommandTimeoutMs;
 use crate::config_types::EditMode;
@@ -2151,6 +2152,9 @@ async fn handle_function_call(
             .await
         }
         "update_plan" => handle_update_plan(sess, arguments, sub_id, call_id).await,
+        "calculate" => handle_calculate(arguments, call_id),
+        "quadratic_solve" => handle_quadratic_solve(arguments, call_id),
+        "matrix_det" => handle_matrix_det(arguments, call_id),
         EXEC_COMMAND_TOOL_NAME => {
             // TODO(mbolin): Sandbox check.
             let exec_params = match serde_json::from_str::<ExecCommandParams>(&arguments) {

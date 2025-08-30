@@ -74,9 +74,11 @@ You can also use Codex with an API key, but this requires [additional setup](./d
 
 Codex CLI supports [MCP servers](./docs/advanced.md#model-context-protocol-mcp). Enable by adding an `mcp_servers` section to your `~/.codex/config.toml`.
 
+Dynamic plugin loading has been removed. All former plugins are now built into the core.
+
 ### Remote server/client mode
 
-Codex also includes a lightweight TCP server and client that let you run the agent on one machine and drive it from another. Launch the server with `cargo run -p codex-server` (or the `codex-server` binary) and connect using `cargo run -p codex-client` or the `codex-client` binary. The server boots the same `ConversationManager` used by the CLI, so plugins, MCP servers and other runtime features remain available when Codex runs in this remote mode.
+Codex also includes a lightweight TCP server and client that let you run the agent on one machine and drive it from another. Launch the server with `cargo run -p codex-server` (or the `codex-server` binary) and connect using `cargo run -p codex-client` or the `codex-client` binary. The server boots the same `ConversationManager` used by the CLI, so MCP servers and other runtime features remain available when Codex runs in this remote mode.
 
 ### Configuration
 
