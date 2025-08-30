@@ -1,9 +1,12 @@
 use std::process::Command;
 
-use anyhow::{Context, Result, anyhow};
+use anyhow::Context;
+use anyhow::Result;
+use anyhow::anyhow;
 use serde_json::json;
 
-use crate::{ModelProviderInfo, create_oss_provider_with_base_url};
+use crate::ModelProviderInfo;
+use crate::create_oss_provider_with_base_url;
 
 /// Integration helpers for invoking Python's AutoGen framework.
 ///
@@ -76,10 +79,10 @@ pub fn run_autogen_with_provider(
         entry["base_url"] = json!(base_url);
     }
 
-    if let Some(env_key) = &provider.env_key {
-        if let Ok(value) = std::env::var(env_key) {
-            entry["api_key"] = json!(value);
-        }
+    if let Some(env_key) = &provider.env_key
+        && let Ok(value) = std::env::var(env_key)
+    {
+        entry["api_key"] = json!(value);
     }
 
     let config_list = json!([entry]);

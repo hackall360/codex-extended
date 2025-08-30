@@ -31,21 +31,20 @@ pub async fn ensure_oss_ready(config: &mut Config) -> std::io::Result<()> {
                 return Ok(());
             }
 
-            if requested_model == DEFAULT_OSS_MODEL {
-                if let Some(first) = models.first() {
-                    tracing::info!("Using local Ollama model `{}`", first);
-                    config.model = first.clone();
-                    config.model_family =
-                        find_family_for_model(first).unwrap_or_else(|| ModelFamily {
-                            slug: first.clone(),
-                            family: first.clone(),
-                            needs_special_apply_patch_instructions: false,
-                            supports_reasoning_summaries: false,
-                            uses_local_shell_tool: false,
-                            apply_patch_tool_type: None,
-                        });
-                    return Ok(());
-                }
+            if requested_model == DEFAULT_OSS_MODEL
+                && let Some(first) = models.first()
+            {
+                tracing::info!("Using local Ollama model `{}`", first);
+                config.model = first.clone();
+                config.model_family = find_family_for_model(first).unwrap_or_else(|| ModelFamily {
+                    slug: first.clone(),
+                    family: first.clone(),
+                    needs_special_apply_patch_instructions: false,
+                    supports_reasoning_summaries: false,
+                    uses_local_shell_tool: false,
+                    apply_patch_tool_type: None,
+                });
+                return Ok(());
             }
 
             let mut reporter = crate::CliProgressReporter::new();
@@ -65,7 +64,9 @@ pub async fn ensure_oss_ready(config: &mut Config) -> std::io::Result<()> {
 mod tests {
     use super::*;
     use codex_core::BUILT_IN_OSS_MODEL_PROVIDER_ID;
-    use codex_core::config::{Config, ConfigOverrides, ConfigToml};
+    use codex_core::config::Config;
+    use codex_core::config::ConfigOverrides;
+    use codex_core::config::ConfigToml;
 
     // Skip network tests when sandbox networking is disabled.
     fn networking_disabled() -> bool {

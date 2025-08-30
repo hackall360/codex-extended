@@ -1,6 +1,7 @@
+#![allow(clippy::print_stdout)]
+
 use std::io::Cursor;
 use std::io::Error as IoError;
-use std::io::ErrorKind;
 use std::io::Write;
 use std::path::Path;
 use std::path::PathBuf;
@@ -89,11 +90,12 @@ fn select_model<'a>(models: &'a [ModelInfo], kind: &str) -> Result<&'a ModelInfo
     }
     loop {
         let ans = prompt("Choose a model number: ")
-            .map_err(|e| CodexErr::Io(IoError::new(ErrorKind::Other, e.to_string())))?;
-        if let Ok(idx) = ans.parse::<usize>() {
-            if idx > 0 && idx <= models.len() {
-                return Ok(&models[idx - 1]);
-            }
+            .map_err(|e| CodexErr::Io(IoError::other(e.to_string())))?;
+        if let Ok(idx) = ans.parse::<usize>()
+            && idx > 0
+            && idx <= models.len()
+        {
+            return Ok(&models[idx - 1]);
         }
         println!("Invalid selection. Please try again.");
     }
@@ -108,28 +110,25 @@ async fn ensure_file(path: &Path, model: &ModelInfo) -> Result<()> {
         "By downloading, you agree to the model's license terms provided by the third-party author."
     );
     let ans = prompt("Download this model now? [y/N]: ")
-        .map_err(|e| CodexErr::Io(IoError::new(ErrorKind::Other, e.to_string())))?;
+        .map_err(|e| CodexErr::Io(IoError::other(e.to_string())))?;
     if !matches!(ans.to_lowercase().as_str(), "y" | "yes") {
-        return Err(CodexErr::Io(IoError::new(
-            ErrorKind::Other,
-            "model download declined",
-        )));
+        return Err(CodexErr::Io(IoError::other("model download declined")));
     }
     println!("Downloading {}...", model.url);
     let bytes = reqwest::get(model.url)
         .await
-        .map_err(|e| CodexErr::Io(IoError::new(ErrorKind::Other, e.to_string())))?
+        .map_err(|e| CodexErr::Io(IoError::other(e.to_string())))?
         .bytes()
         .await
-        .map_err(|e| CodexErr::Io(IoError::new(ErrorKind::Other, e.to_string())))?;
+        .map_err(|e| CodexErr::Io(IoError::other(e.to_string())))?;
     if let Some(parent) = path.parent() {
         tokio_fs::create_dir_all(parent)
             .await
-            .map_err(|e| CodexErr::Io(IoError::new(ErrorKind::Other, e.to_string())))?;
+            .map_err(|e| CodexErr::Io(IoError::other(e.to_string())))?;
     }
     tokio_fs::write(path, &bytes)
         .await
-        .map_err(|e| CodexErr::Io(IoError::new(ErrorKind::Other, e.to_string())))?;
+        .map_err(|e| CodexErr::Io(IoError::other(e.to_string())))?;
     Ok(())
 }
 
@@ -181,27 +180,24 @@ impl LocalVoice {
     pub async fn transcribe_audio(&self, audio: &[u8], _mime_type: &str) -> Result<String> {
         // Decode using rodio; expect 16kHz mono PCM.
         let cursor = Cursor::new(audio.to_vec());
-        let decoder = Decoder::new(cursor)
-            .map_err(|e| CodexErr::Io(IoError::new(ErrorKind::Other, e.to_string())))?;
+        let decoder =
+            Decoder::new(cursor).map_err(|e| CodexErr::Io(IoError::other(e.to_string())))?;
         let sample_rate = decoder.sample_rate();
         let channels = decoder.channels();
         if sample_rate != 16_000 || channels != 1 {
-            return Err(CodexErr::Io(IoError::new(
-                ErrorKind::InvalidInput,
-                "audio must be 16kHz mono",
-            )));
+            return Err(CodexErr::Io(IoError::other("audio must be 16kHz mono")));
         }
         let samples: Vec<f32> = decoder.convert_samples().collect();
 
         let model_path = self
             .stt_model
             .to_str()
-            .ok_or_else(|| CodexErr::Io(IoError::new(ErrorKind::Other, "invalid model path")))?;
+            .ok_or_else(|| CodexErr::Io(IoError::other("invalid model path")))?;
         let ctx = WhisperContext::new_with_params(model_path, WhisperContextParameters::default())
-            .map_err(|e| CodexErr::Io(IoError::new(ErrorKind::Other, e.to_string())))?;
+            .map_err(|e| CodexErr::Io(IoError::other(e.to_string())))?;
         let mut state = ctx
             .create_state()
-            .map_err(|e| CodexErr::Io(IoError::new(ErrorKind::Other, e.to_string())))?;
+            .map_err(|e| CodexErr::Io(IoError::other(e.to_string())))?;
         let mut params = FullParams::new(SamplingStrategy::Greedy { best_of: 1 });
         params.set_print_special(false);
         params.set_print_progress(false);
@@ -209,14 +205,14 @@ impl LocalVoice {
         params.set_print_timestamps(false);
         state
             .full(params, &samples)
-            .map_err(|e| CodexErr::Io(IoError::new(ErrorKind::Other, e.to_string())))?;
+            .map_err(|e| CodexErr::Io(IoError::other(e.to_string())))?;
         let num_segments = state.full_n_segments();
         let mut out = String::new();
         for i in 0..num_segments {
             if let Some(segment) = state.get_segment(i) {
                 let text = segment
                     .to_str()
-                    .map_err(|e| CodexErr::Io(IoError::new(ErrorKind::Other, e.to_string())))?;
+                    .map_err(|e| CodexErr::Io(IoError::other(e.to_string())))?;
                 out.push_str(text);
             }
         }
@@ -225,20 +221,21 @@ impl LocalVoice {
 
     /// Synthesize speech audio bytes from text using Kokoro TTS.
     pub async fn synthesize_speech(&self, text: &str, _voice: &str) -> Result<Vec<u8>> {
-        let model_path = self.tts_model.to_str().ok_or_else(|| {
-            CodexErr::Io(IoError::new(ErrorKind::Other, "invalid TTS model path"))
-        })?;
+        let model_path = self
+            .tts_model
+            .to_str()
+            .ok_or_else(|| CodexErr::Io(IoError::other("invalid TTS model path")))?;
         let voice_path = self
             .tts_voice
             .to_str()
-            .ok_or_else(|| CodexErr::Io(IoError::new(ErrorKind::Other, "invalid voice path")))?;
+            .ok_or_else(|| CodexErr::Io(IoError::other("invalid voice path")))?;
         let tts = KokoroTts::new(model_path, voice_path)
             .await
-            .map_err(|e| CodexErr::Io(IoError::new(ErrorKind::Other, e.to_string())))?;
+            .map_err(|e| CodexErr::Io(IoError::other(e.to_string())))?;
         let (audio, _took) = tts
             .synth(text, Voice::AfAlloy(1.0))
             .await
-            .map_err(|e| CodexErr::Io(IoError::new(ErrorKind::Other, e.to_string())))?;
+            .map_err(|e| CodexErr::Io(IoError::other(e.to_string())))?;
 
         // Convert f32 samples to WAV bytes (16-bit PCM at 24kHz).
         let pcm: Vec<i16> = audio
@@ -254,15 +251,15 @@ impl LocalVoice {
                 sample_format: SampleFormat::Int,
             };
             let mut writer = WavWriter::new(Cursor::new(&mut out), spec)
-                .map_err(|e| CodexErr::Io(IoError::new(ErrorKind::Other, e.to_string())))?;
+                .map_err(|e| CodexErr::Io(IoError::other(e.to_string())))?;
             for s in pcm {
                 writer
                     .write_sample(s)
-                    .map_err(|e| CodexErr::Io(IoError::new(ErrorKind::Other, e.to_string())))?;
+                    .map_err(|e| CodexErr::Io(IoError::other(e.to_string())))?;
             }
             writer
                 .finalize()
-                .map_err(|e| CodexErr::Io(IoError::new(ErrorKind::Other, e.to_string())))?;
+                .map_err(|e| CodexErr::Io(IoError::other(e.to_string())))?;
         }
         Ok(out)
     }

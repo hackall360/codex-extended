@@ -289,11 +289,11 @@ impl ModelProviderInfo {
     /// Advance to the next API key in `api_keys`. Returns `true` if rotation
     /// occurred and `false` otherwise (e.g. zero or one key configured).
     pub fn rotate_api_key(&mut self) -> bool {
-        if let Some(keys) = &self.api_keys {
-            if keys.len() > 1 {
-                self.api_key_index = (self.api_key_index + 1) % keys.len();
-                return true;
-            }
+        if let Some(keys) = &self.api_keys
+            && keys.len() > 1
+        {
+            self.api_key_index = (self.api_key_index + 1) % keys.len();
+            return true;
         }
         false
     }
