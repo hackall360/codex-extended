@@ -45,4 +45,4 @@ env = { "API_KEY" = "value" }
 
 ## Remote server and client
 
-Codex can also run as a minimal TCP server (`cargo run -p codex-server`) and be driven by a matching client (`cargo run -p codex-client`). The server accepts newline-delimited JSON `Submission` objects and streams back `Event` messages. Because it uses the same `ConversationManager` as the CLI, plugins, MCP servers, and other runtime features remain available when Codex runs in this remote mode.
+Codex can also run as a minimal TCP server (`cargo run -p codex-server`) and be driven by a matching client (`cargo run -p codex-client`). The server accepts newline-delimited JSON `Submission` objects and streams back `Event` messages. Because it uses the same `ConversationManager` as the CLI, MCP servers and other runtime features remain available when Codex runs in this remote mode.

@@ -76,7 +76,7 @@ Codex CLI supports [MCP servers](./docs/advanced.md#model-context-protocol-mcp).
 
 ### Remote server/client mode
 
-Codex also includes a lightweight TCP server and client that let you run the agent on one machine and drive it from another. Launch the server with `cargo run -p codex-server` (or the `codex-server` binary) and connect using `cargo run -p codex-client` or the `codex-client` binary. The server boots the same `ConversationManager` used by the CLI, so plugins, MCP servers and other runtime features remain available when Codex runs in this remote mode.
+Codex also includes a lightweight TCP server and client that let you run the agent on one machine and drive it from another. Launch the server with `cargo run -p codex-server` (or the `codex-server` binary) and connect using `cargo run -p codex-client` or the `codex-client` binary. The server boots the same `ConversationManager` used by the CLI, so MCP servers and other runtime features remain available when Codex runs in this remote mode.
 
 ### Configuration
 

@@ -4,8 +4,8 @@
 - `codex-rs/`: Rust workspace (core agent, tools, TUI, CLI). Key crates: `core` (business logic), `tui` (terminal UI), `cli` (binary), plus utilities.
 - `codex-cli/`: Node.js packaging/scripts for distribution.
 - `web-ui/`: Flutter/Dart frontend experiments.
-- `docs/`: Design notes and contributor docs (see `docs/plugins.md`).
-- `plugins/`: Autodiscovered MCP plugins (e.g., `plugins/complex_math`).
+- `docs/`: Design notes and contributor docs.
+- Plugin system has been removed; integrate additional tools directly into the core or via configured MCP servers.
 
 ## Build, Test, and Development Commands
 - Rust (from `codex-rs/`):
@@ -37,4 +37,3 @@
 
 ## Security & Configuration Tips
 - Sandboxing/approvals are controlled by `config.toml` (see `codex-rs/config.md`). For fully unattended workflows, set `autonomous_mode = true`.
-- Plugins: place MCP servers under `plugins/<name>/plugin.toml`; see `docs/plugins.md` for schema and examples.

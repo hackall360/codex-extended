@@ -905,21 +905,8 @@ impl Config {
             }
         }
 
-        // Auto-discover plugins from `plugins/` folders and merge into MCP servers.
-        // Order of precedence (highest to lowest):
-        //   1) Explicit entries in config.toml (cfg.mcp_servers)
-        //   2) Project-local plugins (<cwd>/plugins)
-        //   3) Global plugins (~/.codex/plugins)
-        let (mut discovered_mcp_servers, plugin_warnings) =
-            crate::plugins::discover_mcp_plugins(&resolved_cwd, &codex_home);
-        if !plugin_warnings.is_empty() {
-            for w in plugin_warnings {
-                tracing::warn!("{w}");
-            }
-        }
-        for (k, v) in cfg.mcp_servers.into_iter() {
-            discovered_mcp_servers.insert(k, v);
-        }
+        // MCP servers explicitly defined in the configuration.
+        let discovered_mcp_servers = cfg.mcp_servers;
 
         let config = Self {
             model,

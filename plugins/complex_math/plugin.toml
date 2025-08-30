@@ -1,6 +1,0 @@
-name = "complex_math"
-
-[mcp]
-command = "python"
-args = ["run.py"]
-
