@@ -41,4 +41,8 @@ env = { "API_KEY" = "value" }
 ```
 
 > [!TIP]
-> It is somewhat experimental, but the Codex CLI can also be run as an MCP _server_ via `codex mcp`. If you launch it with an MCP client such as `npx @modelcontextprotocol/inspector codex mcp` and send it a `tools/list` request, you will see that there is only one tool, `codex`, that accepts a grab-bag of inputs, including a catch-all `config` map for anything you might want to override. Feel free to play around with it and provide feedback via GitHub issues. 
+> It is somewhat experimental, but the Codex CLI can also be run as an MCP _server_ via `codex mcp`. If you launch it with an MCP client such as `npx @modelcontextprotocol/inspector codex mcp` and send it a `tools/list` request, you will see that there is only one tool, `codex`, that accepts a grab-bag of inputs, including a catch-all `config` map for anything you might want to override. Feel free to play around with it and provide feedback via GitHub issues.
+
+## Remote server and client
+
+Codex can also run as a minimal TCP server (`cargo run -p codex-server`) and be driven by a matching client (`cargo run -p codex-client`). The server accepts newline-delimited JSON `Submission` objects and streams back `Event` messages. Because it uses the same `ConversationManager` as the CLI, plugins, MCP servers, and other runtime features remain available when Codex runs in this remote mode.

@@ -31,6 +31,10 @@ It is still experimental, but you can also launch Codex as an MCP _server_ by ru
 npx @modelcontextprotocol/inspector codex mcp
 ```
 
+### Remote server and client
+
+For remote workflows, the workspace includes `codex-server` and `codex-client` binaries. `codex-server` exposes a raw TCP interface that speaks the same JSON protocol used by the CLI, and `codex-client` forwards stdin to the server and prints events. Because the server spins up the full `ConversationManager`, all plugins, MCP servers, and other runtime features remain available when using Codex over the network.
+
 ### Notifications
 
 You can enable notifications by configuring a script that is run whenever the agent finishes a turn. The [notify documentation](../docs/config.md#notify) includes a detailed example that explains how to get desktop notifications via [terminal-notifier](https://github.com/julienXX/terminal-notifier) on macOS.
@@ -135,6 +139,7 @@ codex --edit-mode trusted
 ```
 
 Safety guidance for `trusted`:
+
 - Prefer running in a VM or container.
 - Consider pairing with `--sandbox workspace-write` for guardrails. If you need `--sandbox danger-full-access`, only do so inside an isolated environment.
 - Control host command timeouts via `-c command_timeout_ms=120000` or disable with `-c command_timeout_ms=\"none\"`.
