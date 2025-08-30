@@ -37,6 +37,12 @@ pub enum WireApi {
     /// Regular Chat Completions compatible with `/v1/chat/completions`.
     #[default]
     Chat,
+
+    /// A user supplied [`ModelAdapter`] implementation. Providers that set
+    /// this require an adapter to be injected when constructing the
+    /// [`ModelClient`].
+    #[serde(rename = "custom")]
+    Custom,
 }
 
 /// Serializable representation of a provider definition.
@@ -214,6 +220,7 @@ impl ModelProviderInfo {
         match self.wire_api {
             WireApi::Responses => format!("{base_url}/responses{query_string}"),
             WireApi::Chat => format!("{base_url}/chat/completions{query_string}"),
+            WireApi::Custom => format!("{base_url}{query_string}"),
         }
     }
 
