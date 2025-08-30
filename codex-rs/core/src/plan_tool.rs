@@ -17,8 +17,7 @@ pub use codex_protocol::plan_tool::StepStatus;
 pub use codex_protocol::plan_tool::UpdatePlanArgs;
 
 // Types for the TODO tool arguments matching codex-vscode/todo-mcp/src/main.rs
-
-pub(crate) static PLAN_TOOL: LazyLock<OpenAiTool> = LazyLock::new(|| {
+fn plan_item_schema(depth: u8) -> JsonSchema {
     let mut plan_item_props = BTreeMap::new();
     plan_item_props.insert("step".to_string(), JsonSchema::String { description: None });
     plan_item_props.insert(
@@ -27,14 +26,26 @@ pub(crate) static PLAN_TOOL: LazyLock<OpenAiTool> = LazyLock::new(|| {
             description: Some("One of: pending, in_progress, completed".to_string()),
         },
     );
+    if depth > 0 {
+        plan_item_props.insert(
+            "sub_steps".to_string(),
+            JsonSchema::Array {
+                description: Some("Nested sub-steps".to_string()),
+                items: Box::new(plan_item_schema(depth - 1)),
+            },
+        );
+    }
+    JsonSchema::Object {
+        properties: plan_item_props,
+        required: Some(vec!["step".to_string(), "status".to_string()]),
+        additional_properties: Some(false),
+    }
+}
 
+pub(crate) static PLAN_TOOL: LazyLock<OpenAiTool> = LazyLock::new(|| {
     let plan_items_schema = JsonSchema::Array {
         description: Some("The list of steps".to_string()),
-        items: Box::new(JsonSchema::Object {
-            properties: plan_item_props,
-            required: Some(vec!["step".to_string(), "status".to_string()]),
-            additional_properties: Some(false),
-        }),
+        items: Box::new(plan_item_schema(3)),
     };
 
     let mut properties = BTreeMap::new();

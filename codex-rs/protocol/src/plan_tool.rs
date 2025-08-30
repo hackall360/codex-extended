@@ -15,6 +15,8 @@ pub enum StepStatus {
 pub struct PlanItemArg {
     pub step: String,
     pub status: StepStatus,
+    #[serde(default)]
+    pub sub_steps: Vec<PlanItemArg>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
