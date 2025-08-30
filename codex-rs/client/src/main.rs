@@ -34,7 +34,13 @@ async fn main() -> anyhow::Result<()> {
             }
             match serde_json::from_str::<Submission>(&line) {
                 Ok(sub) => {
-                    let s = serde_json::to_string(&sub).unwrap();
+                    let s = match serde_json::to_string(&sub) {
+                        Ok(s) => s,
+                        Err(e) => {
+                            eprintln!("invalid submission: {e}");
+                            continue;
+                        }
+                    };
                     if write_half.write_all(s.as_bytes()).await.is_err() {
                         break;
                     }

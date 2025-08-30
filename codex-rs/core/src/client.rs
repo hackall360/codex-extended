@@ -129,11 +129,20 @@ impl ModelClient {
     /// the provider config.  Public callers always invoke `stream()` – the
     /// specialised helpers are private to avoid accidental misuse.
     pub async fn stream(&self, prompt: &Prompt) -> Result<ResponseStream> {
-        let wire_api = { self.provider.lock().unwrap().wire_api };
+        let wire_api = {
+            self.provider
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .wire_api
+        };
         match wire_api {
             WireApi::Responses => self.stream_responses(prompt).await,
             WireApi::Chat => {
-                let provider = self.provider.lock().unwrap().clone();
+                let provider = self
+                    .provider
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .clone();
                 // Create the raw streaming connection first.
                 let response_stream = stream_chat_completions(
                     prompt,
@@ -170,7 +179,11 @@ impl ModelClient {
             }
             WireApi::Custom => {
                 let adapter = self.adapter.as_ref().ok_or(CodexErr::NoModelAdapter)?;
-                let provider = self.provider.lock().unwrap().clone();
+                let provider = self
+                    .provider
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .clone();
                 adapter
                     .stream(prompt, &self.config.model_family, &self.client, &provider)
                     .await
@@ -180,7 +193,11 @@ impl ModelClient {
 
     /// Implementation for the OpenAI *Responses* experimental API.
     async fn stream_responses(&self, prompt: &Prompt) -> Result<ResponseStream> {
-        let provider = self.provider.lock().unwrap().clone();
+        let provider = self
+            .provider
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone();
         if let Some(path) = &*CODEX_RS_SSE_FIXTURE {
             // short circuit for tests
             warn!(path, "Streaming from fixture");
@@ -396,7 +413,10 @@ impl ModelClient {
     }
 
     pub fn get_provider(&self) -> ModelProviderInfo {
-        self.provider.lock().unwrap().clone()
+        self.provider
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone()
     }
 
     /// Returns the currently configured model slug.
@@ -426,12 +446,18 @@ impl ModelClient {
     /// Rotate to the next API key for the current provider. Returns `true`
     /// if a rotation occurred.
     pub fn rotate_api_key(&self) -> bool {
-        self.provider.lock().unwrap().rotate_api_key()
+        self.provider
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .rotate_api_key()
     }
 
     /// Reset provider API key rotation back to the first key.
     pub fn reset_api_key_rotation(&self) {
-        self.provider.lock().unwrap().reset_api_key_rotation();
+        self.provider
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .reset_api_key_rotation();
     }
 }
 

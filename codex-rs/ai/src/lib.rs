@@ -2,11 +2,12 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use futures::StreamExt;
-use genai::{
-    Client as GenaiClient,
-    chat::{ChatMessage, ChatRequest, ChatStreamEvent},
-};
-use groqai::{AudioTranscriptionRequest, GroqClient};
+use genai::Client as GenaiClient;
+use genai::chat::ChatMessage;
+use genai::chat::ChatRequest;
+use genai::chat::ChatStreamEvent;
+use groqai::AudioTranscriptionRequest;
+use groqai::GroqClient;
 
 /// Thin facade over GenAI and Groq clients.
 #[derive(Clone)]

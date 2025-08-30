@@ -92,7 +92,7 @@ pub struct FreeformToolFormat {
 /// Responses API.
 #[derive(Debug, Clone, Serialize, PartialEq)]
 #[serde(tag = "type")]
-pub(crate) enum OpenAiTool {
+pub enum OpenAiTool {
     #[serde(rename = "function")]
     Function(ResponsesApiTool),
     #[serde(rename = "local_shell")]
@@ -560,13 +560,12 @@ fn sanitize_json_schema(value: &mut JsonValue) {
                 // boolean). In this case, sanitize the schema and then replace it
                 // with `true` to preserve the intent of allowing additional
                 // properties. Booleans are left as-is.
-                if let Some(ap) = map.get_mut("additionalProperties") {
-                    if !matches!(ap, JsonValue::Bool(_)) {
-                        // Sanitizing ensures any nested schema is well-formed
-                        // before we drop it.
-                        sanitize_json_schema(ap);
-                        *ap = JsonValue::Bool(true);
-                    }
+                if let Some(ap) = map.get_mut("additionalProperties")
+                    && !matches!(ap, JsonValue::Bool(_))
+                {
+                    // Sanitizing ensures any nested schema is well-formed before we drop it.
+                    sanitize_json_schema(ap);
+                    *ap = JsonValue::Bool(true);
                 }
             }
 
