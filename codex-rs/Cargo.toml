@@ -18,6 +18,8 @@ members = [
     "ollama",
     "protocol",
     "protocol-ts",
+    "server",
+    "client",
     "tui",
 ]
 resolver = "2"

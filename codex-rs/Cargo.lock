@@ -936,6 +936,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "codex-client"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "codex-core",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "codex-common"
 version = "0.0.0"
 dependencies = [
@@ -1194,6 +1207,21 @@ dependencies = [
  "clap",
  "codex-protocol",
  "ts-rs",
+]
+
+[[package]]
+name = "codex-server"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "codex-common",
+ "codex-core",
+ "codex-login",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]

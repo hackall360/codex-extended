@@ -1,0 +1,22 @@
+[package]
+name = "codex-server"
+version = { workspace = true }
+edition = "2024"
+
+[[bin]]
+name = "codex-server"
+path = "src/main.rs"
+
+[lints]
+workspace = true
+
+[dependencies]
+anyhow = "1"
+clap = { version = "4", features = ["derive"] }
+codex-common = { path = "../common", features = ["cli"] }
+codex-core = { path = "../core" }
+codex-login = { path = "../login" }
+serde_json = "1"
+tokio = { version = "1", features = ["macros", "net", "io-util", "rt-multi-thread", "signal"] }
+tracing = "0.1"
+tracing-subscriber = "0.3"
