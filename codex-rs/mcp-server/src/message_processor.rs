@@ -308,11 +308,33 @@ impl MessageProcessor {
         params: <mcp_types::ListToolsRequest as mcp_types::ModelContextProtocolRequest>::Params,
     ) {
         tracing::trace!("tools/list -> {params:?}");
+        let codex_tool = match create_tool_for_codex_tool_call_param() {
+            Ok(tool) => tool,
+            Err(e) => {
+                let error = JSONRPCErrorError {
+                    code: INVALID_REQUEST_ERROR_CODE,
+                    message: format!("failed to generate codex tool schema: {e}"),
+                    data: None,
+                };
+                self.outgoing.send_error(id, error).await;
+                return;
+            }
+        };
+        let codex_reply_tool = match create_tool_for_codex_tool_call_reply_param() {
+            Ok(tool) => tool,
+            Err(e) => {
+                let error = JSONRPCErrorError {
+                    code: INVALID_REQUEST_ERROR_CODE,
+                    message: format!("failed to generate codex-reply tool schema: {e}"),
+                    data: None,
+                };
+                self.outgoing.send_error(id, error).await;
+                return;
+            }
+        };
+
         let result = ListToolsResult {
-            tools: vec![
-                create_tool_for_codex_tool_call_param(),
-                create_tool_for_codex_tool_call_reply_param(),
-            ],
+            tools: vec![codex_tool, codex_reply_tool],
             next_cursor: None,
         };
 

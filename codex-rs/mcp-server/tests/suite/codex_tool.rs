@@ -364,6 +364,42 @@ async fn codex_tool_passes_base_instructions() -> anyhow::Result<()> {
     Ok(())
 }
 
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn test_codex_tool_rejects_malformed_schema_input() {
+    if let Err(err) = codex_tool_rejects_malformed_schema_input().await {
+        panic!("failure: {err}");
+    }
+}
+
+async fn codex_tool_rejects_malformed_schema_input() -> anyhow::Result<()> {
+    let McpHandle {
+        process: mut mcp_process,
+        server: _server,
+        dir: _dir,
+    } = create_mcp_process(vec![]).await?;
+
+    let request_id = mcp_process
+        .send_raw_call_tool_request("codex", Some(json!({"prompt": 1})))
+        .await?;
+
+    let response = timeout(
+        DEFAULT_READ_TIMEOUT,
+        mcp_process.read_stream_until_response_message(RequestId::Integer(request_id)),
+    )
+    .await??;
+
+    assert_eq!(response.id, RequestId::Integer(request_id));
+    assert_eq!(response.jsonrpc, JSONRPC_VERSION);
+    assert_eq!(response.result["isError"], json!(true));
+    let text = response.result["content"][0]["text"].as_str().unwrap();
+    assert!(
+        text.contains("Failed to parse configuration for Codex tool"),
+        "unexpected error message: {text}"
+    );
+
+    Ok(())
+}
+
 fn create_expected_patch_approval_elicitation_request(
     elicitation_request_id: RequestId,
     changes: HashMap<PathBuf, FileChange>,

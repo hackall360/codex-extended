@@ -163,6 +163,23 @@ impl McpProcess {
         .await
     }
 
+    /// Send a `callTool` request with arbitrary arguments.
+    pub async fn send_raw_call_tool_request(
+        &mut self,
+        name: &str,
+        arguments: Option<serde_json::Value>,
+    ) -> anyhow::Result<i64> {
+        let params = CallToolRequestParams {
+            name: name.to_string(),
+            arguments,
+        };
+        self.send_request(
+            mcp_types::CallToolRequest::METHOD,
+            Some(serde_json::to_value(params)?),
+        )
+        .await
+    }
+
     /// Send a `newConversation` JSON-RPC request.
     pub async fn send_new_conversation_request(
         &mut self,
