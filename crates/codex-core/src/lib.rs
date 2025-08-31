@@ -1,67 +1,25 @@
-use serde::{Deserialize, Serialize};
+pub mod config;
 
-/// Configuration for selecting models by tier and for embeddings.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ModelConfig {
-    pub low: String,
-    pub medium: String,
-    pub high: String,
-    pub embedding: String,
+pub use config::{Config, ConfigError, LlmTier, Message, ModelConfig, Role};
+
+/// Trait representing an embedding service.
+pub trait Embedder {
+    fn embed(&self, text: &str) -> Vec<f32>;
 }
 
-impl Default for ModelConfig {
-    fn default() -> Self {
-        Self {
-            low: "tinyllama".into(),
-            medium: "llama3".into(),
-            high: "gpt4".into(),
-            embedding: "nomic-embed-text".into(),
-        }
-    }
+/// Trait representing a chat-oriented language model.
+pub trait ChatModel {
+    fn chat(&self, prompt: &str) -> String;
 }
 
-/// Application configuration wrapper.
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
-pub struct Config {
-    pub models: ModelConfig,
+/// Trait for a vector store that can persist embeddings and perform search.
+pub trait VectorStore {
+    fn add_embedding(&self, embedding: Vec<f32>) -> Result<(), Box<dyn std::error::Error>>;
+    fn search(&self, embedding: Vec<f32>, top_k: usize) -> Vec<usize>;
 }
 
-/// Logical tiers for language models.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub enum LlmTier {
-    Low,
-    Medium,
-    High,
-}
-
-impl Config {
-    /// Return the model name associated with a tier.
-    pub fn model_for_tier(&self, tier: LlmTier) -> &str {
-        match tier {
-            LlmTier::Low => &self.models.low,
-            LlmTier::Medium => &self.models.medium,
-            LlmTier::High => &self.models.high,
-        }
-    }
-
-    /// Return the model name used for embeddings.
-    pub fn embedding_model(&self) -> &str {
-        &self.models.embedding
-    }
-}
-
-/// Role for chat messages.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum Role {
-    System,
-    User,
-    Assistant,
-}
-
-/// Chat message sent to or received from the model.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Message {
-    pub role: Role,
-    pub content: String,
+/// Trait for a generic storage engine.
+pub trait StorageEngine {
+    fn save(&self, key: &str, data: &[u8]) -> Result<(), Box<dyn std::error::Error>>;
+    fn load(&self, key: &str) -> Result<Option<Vec<u8>>, Box<dyn std::error::Error>>;
 }
