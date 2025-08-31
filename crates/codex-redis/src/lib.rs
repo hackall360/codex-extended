@@ -2,7 +2,7 @@ pub mod resp;
 
 use resp::Resp;
 use std::collections::{HashMap, HashSet};
-use std::fs::{File, OpenOptions};
+use std::fs::{File, OpenOptions, read};
 use std::io::{Read, Write};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
@@ -22,6 +22,8 @@ struct Inner {
     expires: Mutex<HashMap<String, Instant>>,
     pubsub: Mutex<HashMap<String, broadcast::Sender<String>>>,
     aof: Mutex<Option<File>>,
+    aof_path: Option<PathBuf>,
+    vectors: Mutex<HashMap<String, codex_redis_vector::Index>>,
 }
 
 #[derive(Clone, Debug)]
@@ -38,9 +40,31 @@ impl Redis {
             expires: Mutex::new(HashMap::new()),
             pubsub: Mutex::new(HashMap::new()),
             aof: Mutex::new(None),
+            aof_path: aof_path.clone(),
+            vectors: Mutex::new(HashMap::new()),
         });
-        let redis = Redis { inner };
-        if let Some(path) = aof_path {
+        let redis = Redis {
+            inner: inner.clone(),
+        };
+        if let Some(path) = aof_path.clone() {
+            // attempt to load vector index snapshots first
+            if let Some(dir) = path.parent() {
+                if let Ok(entries) = std::fs::read_dir(dir) {
+                    for entry in entries.flatten() {
+                        let p = entry.path();
+                        if let Some(name) = p.file_name().and_then(|n| n.to_str()) {
+                            if name.starts_with("vec_") && name.ends_with(".hnsw") {
+                                let key = &name[4..name.len() - 5];
+                                if let Ok(bytes) = read(&p) {
+                                    if let Ok(idx) = codex_redis_vector::Index::load(&bytes) {
+                                        inner.vectors.lock().unwrap().insert(key.to_string(), idx);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
             let mut file = OpenOptions::new()
                 .create(true)
                 .append(true)
@@ -362,6 +386,95 @@ impl Redis {
                 let n = self.publish(ch, msg) as i64;
                 Resp::Integer(n)
             }
+            "VEC.CREATE" => {
+                if cmd.len() < 5 {
+                    return Resp::Error("ERR wrong number of arguments".into());
+                }
+                let key = cmd[1].clone();
+                let dim: usize = cmd[2].parse().unwrap_or(0);
+                let m: usize = cmd[3].parse().unwrap_or(0);
+                let efc: usize = cmd[4].parse().unwrap_or(0);
+                if !log && self.inner.vectors.lock().unwrap().contains_key(&key) {
+                    return Resp::Simple("OK".into());
+                }
+                match codex_redis_vector::Index::new(dim, m, efc) {
+                    Ok(idx) => {
+                        self.inner.vectors.lock().unwrap().insert(key.clone(), idx);
+                        if log {
+                            self.log(cmd);
+                        }
+                        Resp::Simple("OK".into())
+                    }
+                    Err(e) => Resp::Error(format!("ERR {e}")),
+                }
+            }
+            "VEC.ADD" => {
+                if cmd.len() < 5 {
+                    return Resp::Error("ERR wrong number of arguments".into());
+                }
+                let key = cmd[1].clone();
+                let id: u32 = cmd[2].parse().unwrap_or(0);
+                let vec: Vec<f32> = cmd[3].split(',').filter_map(|s| s.parse().ok()).collect();
+                let payload = cmd[4].clone();
+                let mut vecs = self.inner.vectors.lock().unwrap();
+                if let Some(index) = vecs.get_mut(&key) {
+                    match index.add(id, vec) {
+                        Ok(_) => {
+                            self.inner
+                                .store
+                                .lock()
+                                .unwrap()
+                                .insert(format!("doc:{id}"), Value::String(payload.clone()));
+                            if log {
+                                self.log(cmd);
+                            }
+                            Resp::Simple("OK".into())
+                        }
+                        Err(e) => Resp::Error(format!("ERR {e}")),
+                    }
+                } else {
+                    Resp::Error("ERR no such index".into())
+                }
+            }
+            "VEC.SEARCH" => {
+                if cmd.len() < 5 {
+                    return Resp::Error("ERR wrong number of arguments".into());
+                }
+                let key = cmd[1].clone();
+                let query: Vec<f32> = cmd[2].split(',').filter_map(|s| s.parse().ok()).collect();
+                let k: usize = cmd[3].parse().unwrap_or(0);
+                let ef: usize = cmd[4].parse().unwrap_or(k);
+                let vecs = self.inner.vectors.lock().unwrap();
+                if let Some(index) = vecs.get(&key) {
+                    match index.search(query, k, ef) {
+                        Ok(ids) => {
+                            let store = self.inner.store.lock().unwrap();
+                            let arr = ids
+                                .into_iter()
+                                .map(|id| {
+                                    let payload =
+                                        store.get(&format!("doc:{id}")).and_then(|v| match v {
+                                            Value::String(s) => Some(s.clone()),
+                                            _ => None,
+                                        });
+                                    Resp::Array(Some(vec![
+                                        Resp::Integer(id as i64),
+                                        Resp::Bulk(payload.map(|s| s.into_bytes())),
+                                    ]))
+                                })
+                                .collect();
+                            Resp::Array(Some(arr))
+                        }
+                        Err(e) => Resp::Error(format!("ERR {e}")),
+                    }
+                } else {
+                    Resp::Error("ERR no such index".into())
+                }
+            }
+            "COMPACT" => {
+                self.compact();
+                Resp::Simple("OK".into())
+            }
             _ => Resp::Error("ERR unknown command".into()),
         }
     }
@@ -394,6 +507,100 @@ impl Redis {
             ));
             let _ = file.write_all(&arr.encode());
             let _ = file.flush();
+        }
+    }
+
+    fn compact(&self) {
+        let path = match &self.inner.aof_path {
+            Some(p) => p.clone(),
+            None => return,
+        };
+        let tmp = path.with_extension("tmp");
+        let mut file = match File::create(&tmp) {
+            Ok(f) => f,
+            Err(_) => return,
+        };
+
+        {
+            let store = self.inner.store.lock().unwrap();
+            for (k, v) in store.iter() {
+                if let Value::String(s) = v {
+                    let cmd = vec!["SET".into(), k.clone(), s.clone()];
+                    let arr = Resp::Array(Some(
+                        cmd.iter()
+                            .map(|s| Resp::Bulk(Some(s.clone().into_bytes())))
+                            .collect(),
+                    ));
+                    let _ = file.write_all(&arr.encode());
+                }
+            }
+        }
+
+        {
+            let vecs = self.inner.vectors.lock().unwrap();
+            for (name, idx) in vecs.iter() {
+                let create = vec![
+                    "VEC.CREATE".into(),
+                    name.clone(),
+                    idx.dim().to_string(),
+                    idx.m().to_string(),
+                    idx.ef_construction().to_string(),
+                ];
+                let arr = Resp::Array(Some(
+                    create
+                        .iter()
+                        .map(|s| Resp::Bulk(Some(s.clone().into_bytes())))
+                        .collect(),
+                ));
+                let _ = file.write_all(&arr.encode());
+
+                for (id, vec) in idx.vectors().iter() {
+                    let vec_str = vec
+                        .iter()
+                        .map(|v| v.to_string())
+                        .collect::<Vec<_>>()
+                        .join(",");
+                    let payload = self
+                        .inner
+                        .store
+                        .lock()
+                        .unwrap()
+                        .get(&format!("doc:{id}"))
+                        .and_then(|v| match v {
+                            Value::String(s) => Some(s.clone()),
+                            _ => None,
+                        })
+                        .unwrap_or_default();
+                    let add = vec![
+                        "VEC.ADD".into(),
+                        name.clone(),
+                        id.to_string(),
+                        vec_str,
+                        payload,
+                    ];
+                    let arr = Resp::Array(Some(
+                        add.iter()
+                            .map(|s| Resp::Bulk(Some(s.clone().into_bytes())))
+                            .collect(),
+                    ));
+                    let _ = file.write_all(&arr.encode());
+                }
+            }
+        }
+
+        let _ = file.flush();
+        let _ = std::fs::rename(&tmp, &path);
+        if let Ok(f) = OpenOptions::new().append(true).read(true).open(&path) {
+            *self.inner.aof.lock().unwrap() = Some(f);
+        }
+
+        if let Some(dir) = path.parent() {
+            let vecs = self.inner.vectors.lock().unwrap();
+            for (name, idx) in vecs.iter() {
+                if let Ok(bytes) = idx.dump() {
+                    let _ = std::fs::write(dir.join(format!("vec_{}.hnsw", name)), bytes);
+                }
+            }
         }
     }
 
@@ -548,5 +755,81 @@ mod tests {
         let rt = tokio::runtime::Runtime::new().unwrap();
         let msg = rt.block_on(async { rx.recv().await.unwrap() });
         assert_eq!(msg, "hello");
+    }
+
+    #[test]
+    fn vec_index_persistence() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("aof.log");
+        {
+            let r = Redis::new(Some(path.clone()));
+            r.execute(&vec![
+                "VEC.CREATE".into(),
+                "idx".into(),
+                "2".into(),
+                "4".into(),
+                "10".into(),
+            ]);
+            r.execute(&vec![
+                "VEC.ADD".into(),
+                "idx".into(),
+                "1".into(),
+                "1.0,0.0".into(),
+                "doc1".into(),
+            ]);
+            r.execute(&vec![
+                "VEC.ADD".into(),
+                "idx".into(),
+                "2".into(),
+                "0.0,1.0".into(),
+                "doc2".into(),
+            ]);
+            r.execute(&vec!["COMPACT".into()]);
+        }
+
+        // restore with snapshot
+        let r2 = Redis::new(Some(path.clone()));
+        let resp = r2.execute(&vec![
+            "VEC.SEARCH".into(),
+            "idx".into(),
+            "1.0,0.0".into(),
+            "1".into(),
+            "10".into(),
+        ]);
+        match resp {
+            Resp::Array(Some(results)) => {
+                assert_eq!(results.len(), 1);
+                if let Resp::Array(Some(inner)) = &results[0] {
+                    assert_eq!(inner[0], Resp::Integer(1));
+                    assert_eq!(inner[1], Resp::Bulk(Some(b"doc1".to_vec())));
+                } else {
+                    panic!("unexpected resp");
+                }
+            }
+            _ => panic!("unexpected resp"),
+        }
+
+        // remove snapshot and rebuild from AOF
+        std::fs::remove_file(dir.path().join("vec_idx.hnsw")).unwrap();
+        let r3 = Redis::new(Some(path));
+        let resp = r3.execute(&vec![
+            "VEC.SEARCH".into(),
+            "idx".into(),
+            "0.0,1.0".into(),
+            "1".into(),
+            "10".into(),
+        ]);
+        match resp {
+            Resp::Array(Some(results)) => {
+                assert_eq!(results.len(), 1);
+                if let Resp::Array(Some(inner)) = &results[0] {
+                    assert_eq!(inner[0], Resp::Integer(2));
+                    assert_eq!(inner[1], Resp::Bulk(Some(b"doc2".to_vec())));
+                } else {
+                    panic!("unexpected resp");
+                }
+            }
+            _ => panic!("unexpected resp"),
+        }
     }
 }
