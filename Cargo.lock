@@ -363,6 +363,10 @@ dependencies = [
 [[package]]
 name = "codex-redis"
 version = "0.1.0"
+dependencies = [
+ "tempfile",
+ "tokio",
+]
 
 [[package]]
 name = "codex-redis-vector"
