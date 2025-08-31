@@ -107,7 +107,10 @@ async fn shell_command_approval_triggers_elicitation() -> anyhow::Result<()> {
         .send_response(
             elicitation_request_id,
             serde_json::to_value(ExecApprovalResponse {
-                decision: ReviewDecision::Approved,
+                action: "submit".to_string(),
+                content: json!({
+                    "decision": ReviewDecision::Approved,
+                }),
             })?,
         )
         .await?;
