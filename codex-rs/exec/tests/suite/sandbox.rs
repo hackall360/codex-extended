@@ -54,6 +54,7 @@ async fn python_multiprocessing_lock_works_under_sandbox() {
     let writable_roots = vec![PathBuf::from("/dev/shm")];
 
     let policy = SandboxPolicy::WorkspaceWrite {
+        read_roots: vec![],
         writable_roots,
         network_access: false,
         exclude_tmpdir_env_var: false,

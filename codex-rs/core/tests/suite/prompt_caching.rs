@@ -385,6 +385,7 @@ async fn overrides_turn_context_but_keeps_cached_prefix_and_key_constant() {
             cwd: None,
             approval_policy: Some(AskForApproval::Never),
             sandbox_policy: Some(SandboxPolicy::WorkspaceWrite {
+                read_roots: vec![],
                 writable_roots: vec![writable.path().to_path_buf()],
                 network_access: true,
                 exclude_tmpdir_env_var: true,
@@ -513,6 +514,7 @@ async fn per_turn_overrides_keep_cached_prefix_and_key_constant() {
             cwd: new_cwd.path().to_path_buf(),
             approval_policy: AskForApproval::Never,
             sandbox_policy: SandboxPolicy::WorkspaceWrite {
+                read_roots: vec![],
                 writable_roots: vec![writable.path().to_path_buf()],
                 network_access: true,
                 exclude_tmpdir_env_var: true,

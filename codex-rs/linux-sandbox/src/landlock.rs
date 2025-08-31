@@ -35,28 +35,38 @@ pub(crate) fn apply_sandbox_policy_to_current_thread(
         install_network_seccomp_filter_on_current_thread()?;
     }
 
+    let mut writable_roots = Vec::new();
     if !sandbox_policy.has_full_disk_write_access() {
-        let writable_roots = sandbox_policy
+        writable_roots = sandbox_policy
             .get_writable_roots_with_cwd(cwd)
             .into_iter()
             .map(|writable_root| writable_root.root)
             .collect();
-        install_filesystem_landlock_rules_on_current_thread(writable_roots)?;
     }
 
-    // TODO(ragona): Add appropriate restrictions if
-    // `sandbox_policy.has_full_disk_read_access()` is `false`.
+    let mut read_roots = Vec::new();
+    if !sandbox_policy.has_full_disk_read_access() {
+        read_roots = sandbox_policy.get_read_roots_with_cwd(cwd);
+    }
+
+    if !read_roots.is_empty() || !writable_roots.is_empty() {
+        install_filesystem_landlock_rules_on_current_thread(read_roots, writable_roots)?;
+    }
 
     Ok(())
 }
 
 /// Installs Landlock file-system rules on the current thread allowing read
-/// access to the entire file-system while restricting write access to
-/// `/dev/null` and the provided list of `writable_roots`.
+/// access to `read_roots` (or the entire file-system when empty) while
+/// restricting write access to `/dev/null` and the provided list of
+/// `writable_roots`.
 ///
 /// # Errors
 /// Returns [`CodexErr::Sandbox`] variants when the ruleset fails to apply.
-fn install_filesystem_landlock_rules_on_current_thread(writable_roots: Vec<PathBuf>) -> Result<()> {
+fn install_filesystem_landlock_rules_on_current_thread(
+    read_roots: Vec<PathBuf>,
+    writable_roots: Vec<PathBuf>,
+) -> Result<()> {
     let abi = ABI::V5;
     let access_rw = AccessFs::from_all(abi);
     let access_ro = AccessFs::from_read(abi);
@@ -64,10 +74,16 @@ fn install_filesystem_landlock_rules_on_current_thread(writable_roots: Vec<PathB
     let mut ruleset = Ruleset::default()
         .set_compatibility(CompatLevel::BestEffort)
         .handle_access(access_rw)?
-        .create()?
-        .add_rules(landlock::path_beneath_rules(&["/"], access_ro))?
-        .add_rules(landlock::path_beneath_rules(&["/dev/null"], access_rw))?
-        .set_no_new_privs(true);
+        .create()?;
+
+    let ro_paths: Vec<PathBuf> = if read_roots.is_empty() {
+        vec![PathBuf::from("/")]
+    } else {
+        read_roots.clone()
+    };
+    ruleset = ruleset.add_rules(landlock::path_beneath_rules(&ro_paths, access_ro))?;
+    ruleset = ruleset.add_rules(landlock::path_beneath_rules(&["/dev/null"], access_rw))?;
+    ruleset = ruleset.set_no_new_privs(true);
 
     if !writable_roots.is_empty() {
         ruleset = ruleset.add_rules(landlock::path_beneath_rules(&writable_roots, access_rw))?;

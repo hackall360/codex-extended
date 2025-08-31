@@ -578,11 +578,13 @@ impl ConfigToml {
             SandboxMode::ReadOnly => SandboxPolicy::new_read_only_policy(),
             SandboxMode::WorkspaceWrite => match self.sandbox_workspace_write.as_ref() {
                 Some(SandboxWorkspaceWrite {
+                    read_roots,
                     writable_roots,
                     network_access,
                     exclude_tmpdir_env_var,
                     exclude_slash_tmp,
                 }) => SandboxPolicy::WorkspaceWrite {
+                    read_roots: read_roots.clone(),
                     writable_roots: writable_roots.clone(),
                     network_access: *network_access,
                     exclude_tmpdir_env_var: *exclude_tmpdir_env_var,
@@ -1178,6 +1180,7 @@ exclude_slash_tmp = true
         let sandbox_mode_override = None;
         assert_eq!(
             SandboxPolicy::WorkspaceWrite {
+                read_roots: vec![],
                 writable_roots: vec![PathBuf::from("/my/workspace")],
                 network_access: false,
                 exclude_tmpdir_env_var: true,

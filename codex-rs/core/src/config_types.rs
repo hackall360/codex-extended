@@ -119,6 +119,8 @@ pub struct Tui {
 #[derive(Deserialize, Debug, Clone, PartialEq, Default)]
 pub struct SandboxWorkspaceWrite {
     #[serde(default)]
+    pub read_roots: Vec<PathBuf>,
+    #[serde(default)]
     pub writable_roots: Vec<PathBuf>,
     #[serde(default)]
     pub network_access: bool,
