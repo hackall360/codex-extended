@@ -1,0 +1,9 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/codex-core",
+    "crates/codex-ollama",
+    "crates/codex-redis",
+    "crates/codex-redis-vector",
+    "crates/codex-server",
+]
