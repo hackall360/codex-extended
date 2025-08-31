@@ -2,7 +2,8 @@
 // Unified entry point for the Codex CLI.
 
 import path from "path";
-import { fileURLToPath, pathToFileURL } from "url";
+import { fileURLToPath } from "url";
+import { realpathSync } from "fs";
 
 // __dirname equivalent in ESM
 const __filename = fileURLToPath(import.meta.url);
@@ -157,9 +158,10 @@ async function main() {
   }
 }
 
-if (
-  process.argv[1] &&
-  import.meta.url === pathToFileURL(process.argv[1]).href
-) {
-  await main();
+if (process.argv[1]) {
+  const invokedPath = realpathSync(process.argv[1]);
+  const currentPath = fileURLToPath(import.meta.url);
+  if (invokedPath === currentPath) {
+    await main();
+  }
 }
