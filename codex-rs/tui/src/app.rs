@@ -3,6 +3,7 @@ use crate::app_event::AppEvent;
 use crate::app_event_sender::AppEventSender;
 use crate::chatwidget::ChatWidget;
 use crate::file_search::FileSearchManager;
+use crate::history_cell::{self, HistoryCell};
 use crate::pager_overlay::Overlay;
 use crate::tui;
 use crate::tui::TuiEvent;
@@ -184,6 +185,23 @@ impl App {
                 }
             }
             AppEvent::InsertHistoryCell(cell) => {
+                let cell_transcript = cell.transcript_lines();
+                if let Some(Overlay::Transcript(t)) = &mut self.overlay {
+                    t.insert_lines(cell_transcript.clone());
+                    tui.frame_requester().schedule_frame();
+                }
+                self.transcript_lines.extend(cell_transcript.clone());
+                let display = cell.display_lines();
+                if !display.is_empty() {
+                    if self.overlay.is_some() {
+                        self.deferred_history_lines.extend(display);
+                    } else {
+                        tui.insert_history_lines(display);
+                    }
+                }
+            }
+            AppEvent::Error(message) => {
+                let cell = history_cell::new_error_event(message);
                 let cell_transcript = cell.transcript_lines();
                 if let Some(Overlay::Transcript(t)) = &mut self.overlay {
                     t.insert_lines(cell_transcript.clone());

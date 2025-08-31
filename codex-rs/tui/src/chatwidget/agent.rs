@@ -4,6 +4,7 @@ use codex_core::CodexConversation;
 use codex_core::ConversationManager;
 use codex_core::NewConversation;
 use codex_core::config::Config;
+use codex_core::error::get_error_message_ui;
 use codex_core::protocol::Op;
 use tokio::sync::mpsc::UnboundedSender;
 use tokio::sync::mpsc::unbounded_channel;
@@ -29,8 +30,9 @@ pub(crate) fn spawn_agent(
         } = match server.new_conversation(config).await {
             Ok(v) => v,
             Err(e) => {
-                // TODO: surface this error to the user.
+                let message = get_error_message_ui(&e);
                 tracing::error!("failed to initialize codex: {e}");
+                app_event_tx_clone.send(AppEvent::Error(message));
                 return;
             }
         };
