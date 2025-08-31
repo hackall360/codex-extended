@@ -117,6 +117,29 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn embed_propagates_http_errors() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/api/embed"))
+            .respond_with(ResponseTemplate::new(500).set_body_string("oops"))
+            .mount(&server)
+            .await;
+
+        let client = OllamaClient::new(server.uri(), Config::default());
+        let err = client
+            .embed(&["bad".to_string()])
+            .await
+            .expect_err("embed should fail");
+        match err {
+            Error::Http { status, text } => {
+                assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
+                assert_eq!(text, "oops");
+            }
+            other => panic!("unexpected error: {other:?}"),
+        }
+    }
+
+    #[tokio::test]
     async fn chat_uses_tier_model_and_returns_content() {
         let server = MockServer::start().await;
         Mock::given(method("POST"))
@@ -143,5 +166,28 @@ mod tests {
         }];
         let res = client.chat(LlmTier::Low, &msgs).await.expect("chat");
         assert_eq!(res, "hi");
+    }
+
+    #[tokio::test]
+    async fn chat_propagates_http_errors() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/api/chat"))
+            .respond_with(ResponseTemplate::new(404).set_body_string("missing"))
+            .mount(&server)
+            .await;
+
+        let client = OllamaClient::new(server.uri(), Config::default());
+        let err = client
+            .chat(LlmTier::Low, &[])
+            .await
+            .expect_err("chat should fail");
+        match err {
+            Error::Http { status, text } => {
+                assert_eq!(status, StatusCode::NOT_FOUND);
+                assert_eq!(text, "missing");
+            }
+            other => panic!("unexpected error: {other:?}"),
+        }
     }
 }
