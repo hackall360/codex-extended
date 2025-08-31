@@ -1,5 +1,6 @@
 //! Configuration object accepted by the `codex` MCP tool-call.
 
+use anyhow::{Context, Result};
 use codex_core::protocol::AskForApproval;
 use codex_protocol::config_types::SandboxMode;
 use mcp_types::Tool;
@@ -99,7 +100,7 @@ impl From<CodexToolCallSandboxMode> for SandboxMode {
 }
 
 /// Builds a `Tool` definition (JSON schema etc.) for the Codex tool-call.
-pub(crate) fn create_tool_for_codex_tool_call_param() -> Tool {
+pub(crate) fn create_tool_for_codex_tool_call_param() -> Result<Tool> {
     let schema = SchemaSettings::draft2019_09()
         .with(|s| {
             s.inline_subschemas = true;
@@ -110,14 +111,12 @@ pub(crate) fn create_tool_for_codex_tool_call_param() -> Tool {
 
     #[expect(clippy::expect_used)]
     let schema_value =
-        serde_json::to_value(&schema).expect("Codex tool schema should serialise to JSON");
+        serde_json::to_value(&schema).context("Codex tool schema should serialise to JSON")?;
 
-    let tool_input_schema =
-        serde_json::from_value::<ToolInputSchema>(schema_value).unwrap_or_else(|e| {
-            panic!("failed to create Tool from schema: {e}");
-        });
+    let tool_input_schema = serde_json::from_value::<ToolInputSchema>(schema_value)
+        .context("failed to create Tool from schema")?;
 
-    Tool {
+    Ok(Tool {
         name: "codex".to_string(),
         title: Some("Codex".to_string()),
         input_schema: tool_input_schema,
@@ -127,7 +126,7 @@ pub(crate) fn create_tool_for_codex_tool_call_param() -> Tool {
             "Run a Codex session. Accepts configuration parameters matching the Codex Config struct.".to_string(),
         ),
         annotations: None,
-    }
+    })
 }
 
 impl CodexToolCallParam {
@@ -191,7 +190,7 @@ pub struct CodexToolCallReplyParam {
 }
 
 /// Builds a `Tool` definition for the `codex-reply` tool-call.
-pub(crate) fn create_tool_for_codex_tool_call_reply_param() -> Tool {
+pub(crate) fn create_tool_for_codex_tool_call_reply_param() -> Result<Tool> {
     let schema = SchemaSettings::draft2019_09()
         .with(|s| {
             s.inline_subschemas = true;
@@ -201,15 +200,13 @@ pub(crate) fn create_tool_for_codex_tool_call_reply_param() -> Tool {
         .into_root_schema_for::<CodexToolCallReplyParam>();
 
     #[expect(clippy::expect_used)]
-    let schema_value =
-        serde_json::to_value(&schema).expect("Codex reply tool schema should serialise to JSON");
+    let schema_value = serde_json::to_value(&schema)
+        .context("Codex reply tool schema should serialise to JSON")?;
 
-    let tool_input_schema =
-        serde_json::from_value::<ToolInputSchema>(schema_value).unwrap_or_else(|e| {
-            panic!("failed to create Tool from schema: {e}");
-        });
+    let tool_input_schema = serde_json::from_value::<ToolInputSchema>(schema_value)
+        .context("failed to create Tool from schema")?;
 
-    Tool {
+    Ok(Tool {
         name: "codex-reply".to_string(),
         title: Some("Codex Reply".to_string()),
         input_schema: tool_input_schema,
@@ -218,7 +215,7 @@ pub(crate) fn create_tool_for_codex_tool_call_reply_param() -> Tool {
             "Continue a Codex session by providing the session id and prompt.".to_string(),
         ),
         annotations: None,
-    }
+    })
 }
 
 #[cfg(test)]
@@ -239,7 +236,7 @@ mod tests {
     /// https://github.com/modelcontextprotocol/inspector/pull/196
     #[test]
     fn verify_codex_tool_json_schema() {
-        let tool = create_tool_for_codex_tool_call_param();
+        let tool = create_tool_for_codex_tool_call_param().expect("create codex tool");
         let tool_json = serde_json::to_value(&tool).expect("tool serializes");
         let expected_tool_json = serde_json::json!({
           "name": "codex",
@@ -307,7 +304,7 @@ mod tests {
 
     #[test]
     fn verify_codex_tool_reply_json_schema() {
-        let tool = create_tool_for_codex_tool_call_reply_param();
+        let tool = create_tool_for_codex_tool_call_reply_param().expect("create codex-reply tool");
         let tool_json = serde_json::to_value(&tool).expect("tool serializes");
         let expected_tool_json = serde_json::json!({
           "description": "Continue a Codex session by providing the session id and prompt.",
