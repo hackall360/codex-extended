@@ -4,6 +4,8 @@ use std::io::Write;
 
 use crate::tui;
 use crossterm::Command;
+#[cfg(windows)]
+use crossterm::ansi_support::supports_ansi;
 use crossterm::cursor::MoveTo;
 use crossterm::queue;
 use crossterm::style::Color as CColor;
@@ -123,13 +125,15 @@ impl Command for SetScrollRegion {
 
     #[cfg(windows)]
     fn execute_winapi(&self) -> std::io::Result<()> {
-        panic!("tried to execute SetScrollRegion command using WinAPI, use ANSI instead");
+        Err(io::Error::new(
+            io::ErrorKind::Other,
+            "tried to execute SetScrollRegion command using WinAPI, use ANSI instead",
+        ))
     }
 
     #[cfg(windows)]
     fn is_ansi_code_supported(&self) -> bool {
-        // TODO(nornagon): is this supported on Windows?
-        true
+        supports_ansi()
     }
 }
 
@@ -143,13 +147,15 @@ impl Command for ResetScrollRegion {
 
     #[cfg(windows)]
     fn execute_winapi(&self) -> std::io::Result<()> {
-        panic!("tried to execute ResetScrollRegion command using WinAPI, use ANSI instead");
+        Err(io::Error::new(
+            io::ErrorKind::Other,
+            "tried to execute ResetScrollRegion command using WinAPI, use ANSI instead",
+        ))
     }
 
     #[cfg(windows)]
     fn is_ansi_code_supported(&self) -> bool {
-        // TODO(nornagon): is this supported on Windows?
-        true
+        supports_ansi()
     }
 }
 
