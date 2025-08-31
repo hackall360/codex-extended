@@ -1,1 +1,3 @@
-pub fn placeholder() {}
+mod index;
+
+pub use index::Index;
