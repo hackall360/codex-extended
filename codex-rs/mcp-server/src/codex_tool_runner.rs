@@ -9,7 +9,6 @@ use codex_core::CodexConversation;
 use codex_core::ConversationManager;
 use codex_core::NewConversation;
 use codex_core::config::Config as CodexConfig;
-use codex_core::protocol::AgentMessageEvent;
 use codex_core::protocol::ApplyPatchApprovalRequestEvent;
 use codex_core::protocol::Event;
 use codex_core::protocol::EventMsg;
@@ -27,8 +26,10 @@ use tokio::sync::Mutex;
 use uuid::Uuid;
 
 use crate::exec_approval::handle_exec_approval_request;
-use crate::outgoing_message::OutgoingMessageSender;
-use crate::outgoing_message::OutgoingNotificationMeta;
+use crate::outgoing_message::{
+    OutgoingMessageSender, OutgoingNotification, OutgoingNotificationMeta,
+    OutgoingNotificationParams,
+};
 use crate::patch_approval::handle_patch_approval_request;
 
 pub(crate) const INVALID_PARAMS_ERROR_CODE: i64 = -32602;
@@ -150,6 +151,27 @@ pub async fn run_codex_tool_session_reply(
     .await;
 }
 
+async fn send_typed_event_notification(
+    outgoing: &OutgoingMessageSender,
+    request_id: &RequestId,
+    event: &Event,
+) {
+    #[expect(clippy::expect_used)]
+    let event_json = serde_json::to_value(event).expect("Event must serialize");
+    #[expect(clippy::expect_used)]
+    let params = serde_json::to_value(OutgoingNotificationParams {
+        meta: Some(OutgoingNotificationMeta::new(Some(request_id.clone()))),
+        event: event_json,
+    })
+    .expect("OutgoingNotificationParams must serialize");
+    outgoing
+        .send_notification(OutgoingNotification {
+            method: format!("codex/event/{}", event.msg),
+            params: Some(params),
+        })
+        .await;
+}
+
 async fn run_codex_tool_session_inner(
     codex: Arc<CodexConversation>,
     outgoing: Arc<OutgoingMessageSender>,
@@ -246,14 +268,26 @@ async fn run_codex_tool_session_inner(
                     EventMsg::SessionConfigured(_) => {
                         tracing::error!("unexpected SessionConfigured event");
                     }
-                    EventMsg::AgentMessageDelta(_) => {
-                        // TODO: think how we want to support this in the MCP
+                    EventMsg::AgentMessageDelta(delta) => {
+                        let event = Event {
+                            id: event.id.clone(),
+                            msg: EventMsg::AgentMessageDelta(delta),
+                        };
+                        send_typed_event_notification(&outgoing, &request_id, &event).await;
                     }
-                    EventMsg::AgentReasoningDelta(_) => {
-                        // TODO: think how we want to support this in the MCP
+                    EventMsg::AgentReasoningDelta(delta) => {
+                        let event = Event {
+                            id: event.id.clone(),
+                            msg: EventMsg::AgentReasoningDelta(delta),
+                        };
+                        send_typed_event_notification(&outgoing, &request_id, &event).await;
                     }
-                    EventMsg::AgentMessage(AgentMessageEvent { .. }) => {
-                        // TODO: think how we want to support this in the MCP
+                    EventMsg::AgentMessage(agent_msg) => {
+                        let event = Event {
+                            id: event.id.clone(),
+                            msg: EventMsg::AgentMessage(agent_msg),
+                        };
+                        send_typed_event_notification(&outgoing, &request_id, &event).await;
                     }
                     EventMsg::AgentReasoningRawContent(_)
                     | EventMsg::AgentReasoningRawContentDelta(_)
