@@ -18,6 +18,8 @@ pub struct Config {
     pub data_path: PathBuf,
     /// Port the server should bind to.
     pub port: u16,
+    /// Optional RESP port for exposing raw Redis protocol.
+    pub resp_port: Option<u16>,
 }
 
 impl Default for Config {
@@ -29,6 +31,7 @@ impl Default for Config {
             store: StoreChoice::Memory,
             data_path: PathBuf::from("./data"),
             port: 0,
+            resp_port: None,
         }
     }
 }
@@ -49,6 +52,7 @@ struct PartialConfig {
     store: Option<StoreChoice>,
     data_path: Option<PathBuf>,
     port: Option<u16>,
+    resp_port: Option<u16>,
 }
 
 /// Errors that can occur while loading configuration.
@@ -106,6 +110,9 @@ impl Config {
         }
         if let Some(port) = partial.port {
             cfg.port = port;
+        }
+        if let Some(resp) = partial.resp_port {
+            cfg.resp_port = Some(resp);
         }
 
         Ok(cfg)
