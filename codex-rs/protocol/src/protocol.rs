@@ -199,6 +199,11 @@ pub enum SandboxPolicy {
     /// working directory ("workspace").
     #[serde(rename = "workspace-write")]
     WorkspaceWrite {
+        /// Folders that should be readable from within the sandbox. When empty,
+        /// the entire file-system is readable.
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        read_roots: Vec<PathBuf>,
+
         /// Additional folders (beyond cwd and possibly TMPDIR) that should be
         /// writable from within the sandbox.
         #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -272,6 +277,7 @@ impl SandboxPolicy {
     /// not allow network access.
     pub fn new_workspace_write_policy() -> Self {
         SandboxPolicy::WorkspaceWrite {
+            read_roots: vec![],
             writable_roots: vec![],
             network_access: false,
             exclude_tmpdir_env_var: false,
@@ -279,9 +285,13 @@ impl SandboxPolicy {
         }
     }
 
-    /// Always returns `true`; restricting read access is not supported.
+    /// Returns `true` when the entire file-system is readable.
     pub fn has_full_disk_read_access(&self) -> bool {
-        true
+        match self {
+            SandboxPolicy::DangerFullAccess => true,
+            SandboxPolicy::ReadOnly => true,
+            SandboxPolicy::WorkspaceWrite { read_roots, .. } => read_roots.is_empty(),
+        }
     }
 
     pub fn has_full_disk_write_access(&self) -> bool {
@@ -308,6 +318,7 @@ impl SandboxPolicy {
             SandboxPolicy::DangerFullAccess => Vec::new(),
             SandboxPolicy::ReadOnly => Vec::new(),
             SandboxPolicy::WorkspaceWrite {
+                read_roots: _,
                 writable_roots,
                 exclude_tmpdir_env_var,
                 exclude_slash_tmp,
@@ -359,6 +370,15 @@ impl SandboxPolicy {
                     })
                     .collect()
             }
+        }
+    }
+
+    /// Returns the list of readable roots tailored to the current working
+    /// directory. An empty list signifies unrestricted read access.
+    pub fn get_read_roots_with_cwd(&self, _cwd: &Path) -> Vec<PathBuf> {
+        match self {
+            SandboxPolicy::WorkspaceWrite { read_roots, .. } => read_roots.clone(),
+            _ => Vec::new(),
         }
     }
 }

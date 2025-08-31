@@ -153,6 +153,7 @@ mod tests {
         // Build a policy that only includes the two test roots as writable and
         // does not automatically include defaults TMPDIR or /tmp.
         let policy = SandboxPolicy::WorkspaceWrite {
+            read_roots: vec![],
             writable_roots: vec![root_with_git.clone(), root_without_git.clone()],
             network_access: false,
             exclude_tmpdir_env_var: true,
@@ -228,6 +229,7 @@ mod tests {
         // use the default ones (cwd and TMPDIR) and verifies the `.git` check
         // is done properly for cwd.
         let policy = SandboxPolicy::WorkspaceWrite {
+            read_roots: vec![],
             writable_roots: vec![],
             network_access: false,
             exclude_tmpdir_env_var: false,

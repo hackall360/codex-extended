@@ -5,6 +5,7 @@ pub fn summarize_sandbox_policy(sandbox_policy: &SandboxPolicy) -> String {
         SandboxPolicy::DangerFullAccess => "danger-full-access".to_string(),
         SandboxPolicy::ReadOnly => "read-only".to_string(),
         SandboxPolicy::WorkspaceWrite {
+            read_roots: _,
             writable_roots,
             network_access,
             exclude_tmpdir_env_var,

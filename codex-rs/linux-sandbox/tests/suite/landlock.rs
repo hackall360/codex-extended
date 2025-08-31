@@ -34,7 +34,12 @@ fn create_env_from_core_vars() -> HashMap<String, String> {
 }
 
 #[expect(clippy::print_stdout, clippy::expect_used, clippy::unwrap_used)]
-async fn run_cmd(cmd: &[&str], writable_roots: &[PathBuf], timeout_ms: u64) {
+async fn run_cmd(
+    cmd: &[&str],
+    writable_roots: &[PathBuf],
+    read_roots: &[PathBuf],
+    timeout_ms: u64,
+) {
     let params = ExecParams {
         command: cmd.iter().map(|elm| elm.to_string()).collect(),
         cwd: std::env::current_dir().expect("cwd should exist"),
@@ -45,6 +50,7 @@ async fn run_cmd(cmd: &[&str], writable_roots: &[PathBuf], timeout_ms: u64) {
     };
 
     let sandbox_policy = SandboxPolicy::WorkspaceWrite {
+        read_roots: read_roots.to_vec(),
         writable_roots: writable_roots.to_vec(),
         network_access: false,
         // Exclude tmp-related folders from writable roots because we need a
@@ -74,7 +80,7 @@ async fn run_cmd(cmd: &[&str], writable_roots: &[PathBuf], timeout_ms: u64) {
 
 #[tokio::test]
 async fn test_root_read() {
-    run_cmd(&["ls", "-l", "/bin"], &[], SHORT_TIMEOUT_MS).await;
+    run_cmd(&["ls", "-l", "/bin"], &[], &[], SHORT_TIMEOUT_MS).await;
 }
 
 #[tokio::test]
@@ -85,6 +91,7 @@ async fn test_root_write() {
     run_cmd(
         &["bash", "-lc", &format!("echo blah > {tmpfile_path}")],
         &[],
+        &[],
         SHORT_TIMEOUT_MS,
     )
     .await;
@@ -94,6 +101,7 @@ async fn test_root_write() {
 async fn test_dev_null_write() {
     run_cmd(
         &["bash", "-lc", "echo blah > /dev/null"],
+        &[],
         &[],
         // We have seen timeouts when running this test in CI on GitHub,
         // so we are using a generous timeout until we can diagnose further.
@@ -113,6 +121,7 @@ async fn test_writable_root() {
             &format!("echo blah > {}", file_path.to_string_lossy()),
         ],
         &[tmpdir.path().to_path_buf()],
+        &[],
         // We have seen timeouts when running this test in CI on GitHub,
         // so we are using a generous timeout until we can diagnose further.
         LONG_TIMEOUT_MS,
@@ -121,9 +130,23 @@ async fn test_writable_root() {
 }
 
 #[tokio::test]
+#[should_panic]
+async fn test_read_denied() {
+    let tmpdir = tempfile::tempdir().unwrap();
+    let read_roots = vec![
+        tmpdir.path().to_path_buf(),
+        PathBuf::from("/bin"),
+        PathBuf::from("/usr"),
+        PathBuf::from("/lib"),
+        PathBuf::from("/lib64"),
+    ];
+    run_cmd(&["cat", "/etc/hosts"], &[], &read_roots, LONG_TIMEOUT_MS).await;
+}
+
+#[tokio::test]
 #[should_panic(expected = "Sandbox(Timeout)")]
 async fn test_timeout() {
-    run_cmd(&["sleep", "2"], &[], 50).await;
+    run_cmd(&["sleep", "2"], &[], &[], 50).await;
 }
 
 /// Helper that runs `cmd` under the Linux sandbox and asserts that the command

@@ -326,6 +326,7 @@ mod tests {
         // Policy limited to the workspace only; exclude system temp roots so
         // only `cwd` is writable by default.
         let policy_workspace_only = SandboxPolicy::WorkspaceWrite {
+            read_roots: vec![],
             writable_roots: vec![],
             network_access: false,
             exclude_tmpdir_env_var: true,
@@ -347,6 +348,7 @@ mod tests {
         // With the parent dir explicitly added as a writable root, the
         // outside write should be permitted.
         let policy_with_parent = SandboxPolicy::WorkspaceWrite {
+            read_roots: vec![],
             writable_roots: vec![parent.clone()],
             network_access: false,
             exclude_tmpdir_env_var: true,
@@ -388,6 +390,7 @@ mod tests {
             ApplyPatchAction::new_add_for_test(&cwd.join("inner.txt"), "".to_string());
 
         let sandbox_policy = SandboxPolicy::WorkspaceWrite {
+            read_roots: vec![],
             writable_roots: vec![],
             network_access: false,
             exclude_tmpdir_env_var: true,
@@ -414,6 +417,7 @@ mod tests {
             ApplyPatchAction::new_add_for_test(&parent.join("outside.txt"), "".to_string());
 
         let sandbox_policy = SandboxPolicy::WorkspaceWrite {
+            read_roots: vec![],
             writable_roots: vec![],
             network_access: false,
             exclude_tmpdir_env_var: true,
