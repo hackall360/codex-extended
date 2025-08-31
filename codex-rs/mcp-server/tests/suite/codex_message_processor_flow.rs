@@ -26,6 +26,7 @@ use mcp_types::JSONRPCResponse;
 use mcp_types::RequestId;
 use pretty_assertions::assert_eq;
 use std::env;
+use std::time::Duration;
 use tempfile::TempDir;
 use tokio::time::timeout;
 
@@ -344,6 +345,24 @@ async fn test_send_user_turn_changes_approval_policy_behavior() {
     .await
     .expect("task_complete 2 timeout")
     .expect("task_complete 2 notification");
+}
+
+#[test]
+fn test_invalid_path_serialization_fails() {
+    use std::ffi::OsString;
+    use std::os::unix::ffi::OsStringExt;
+
+    let invalid = OsString::from_vec(vec![0xff]);
+    let path = std::path::PathBuf::from(invalid);
+    assert!(serde_json::to_value(&path).is_err());
+}
+
+#[tokio::test]
+async fn test_timeout_elapsed() {
+    tokio::time::pause();
+    let never = async { tokio::time::sleep(Duration::from_secs(60)).await };
+    let res = tokio::time::timeout(Duration::from_secs(30), never).await;
+    assert!(res.is_err());
 }
 
 // Helper: minimal config.toml pointing at mock provider.

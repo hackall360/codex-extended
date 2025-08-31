@@ -720,13 +720,41 @@ async fn apply_bespoke_event_handling(
                 reason,
                 grant_root,
             };
-            let value = serde_json::to_value(&params).unwrap_or_default();
+            let value = match serde_json::to_value(&params) {
+                Ok(v) => v,
+                Err(err) => {
+                    error!("failed to serialize ApplyPatchApprovalParams: {err}");
+                    return;
+                }
+            };
             let rx = outgoing
                 .send_request(APPLY_PATCH_APPROVAL_METHOD, Some(value))
                 .await;
-            // TODO(mbolin): Enforce a timeout so this task does not live indefinitely?
-            tokio::spawn(async move {
-                on_patch_approval_response(event_id, rx, conversation).await;
+            tokio::spawn({
+                let conversation_timeout = conversation.clone();
+                let event_id_timeout = event_id.clone();
+                async move {
+                    if tokio::time::timeout(
+                        Duration::from_secs(30),
+                        on_patch_approval_response(event_id, rx, conversation),
+                    )
+                    .await
+                    .is_err()
+                    {
+                        error!("patch approval response timed out");
+                        if let Err(submit_err) = conversation_timeout
+                            .submit(Op::PatchApproval {
+                                id: event_id_timeout,
+                                decision: ReviewDecision::Denied,
+                            })
+                            .await
+                        {
+                            error!(
+                                "failed to submit denied PatchApproval after timeout: {submit_err}"
+                            );
+                        }
+                    }
+                }
             });
         }
         EventMsg::ExecApprovalRequest(ExecApprovalRequestEvent {
@@ -742,14 +770,42 @@ async fn apply_bespoke_event_handling(
                 cwd,
                 reason,
             };
-            let value = serde_json::to_value(&params).unwrap_or_default();
+            let value = match serde_json::to_value(&params) {
+                Ok(v) => v,
+                Err(err) => {
+                    error!("failed to serialize ExecCommandApprovalParams: {err}");
+                    return;
+                }
+            };
             let rx = outgoing
                 .send_request(EXEC_COMMAND_APPROVAL_METHOD, Some(value))
                 .await;
 
-            // TODO(mbolin): Enforce a timeout so this task does not live indefinitely?
-            tokio::spawn(async move {
-                on_exec_approval_response(event_id, rx, conversation).await;
+            tokio::spawn({
+                let conversation_timeout = conversation.clone();
+                let event_id_timeout = event_id.clone();
+                async move {
+                    if tokio::time::timeout(
+                        Duration::from_secs(30),
+                        on_exec_approval_response(event_id, rx, conversation),
+                    )
+                    .await
+                    .is_err()
+                    {
+                        error!("exec approval response timed out");
+                        if let Err(submit_err) = conversation_timeout
+                            .submit(Op::ExecApproval {
+                                id: event_id_timeout,
+                                decision: ReviewDecision::Denied,
+                            })
+                            .await
+                        {
+                            error!(
+                                "failed to submit denied ExecApproval after timeout: {submit_err}"
+                            );
+                        }
+                    }
+                }
             });
         }
         // If this is a TurnAborted, reply to any pending interrupt requests.
