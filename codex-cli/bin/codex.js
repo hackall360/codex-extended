@@ -2,7 +2,7 @@
 // Unified entry point for the Codex CLI.
 
 import path from "path";
-import { fileURLToPath } from "url";
+import { fileURLToPath, pathToFileURL } from "url";
 
 // __dirname equivalent in ESM
 const __filename = fileURLToPath(import.meta.url);
@@ -82,75 +82,84 @@ async function resolveRgDir() {
   return path.dirname(ripgrep.rgPath);
 }
 
-function getUpdatedPath(newDirs) {
+export function getUpdatedPath(newDirs) {
   const pathSep = process.platform === "win32" ? ";" : ":";
   const existingPath = process.env.PATH || "";
-  const updatedPath = [
+  const dirs = new Set([
     ...newDirs,
     ...existingPath.split(pathSep).filter(Boolean),
-  ].join(pathSep);
-  return updatedPath;
+  ]);
+  return Array.from(dirs).join(pathSep);
 }
 
-const additionalDirs = [];
-const rgDir = await resolveRgDir();
-if (rgDir) {
-  additionalDirs.push(rgDir);
-}
-const updatedPath = getUpdatedPath(additionalDirs);
-
-const child = spawn(binaryPath, process.argv.slice(2), {
-  stdio: "inherit",
-  env: { ...process.env, PATH: updatedPath, CODEX_MANAGED_BY_NPM: "1" },
-});
-
-child.on("error", (err) => {
-  // Typically triggered when the binary is missing or not executable.
-  // Re-throwing here will terminate the parent with a non-zero exit code
-  // while still printing a helpful stack trace.
-  // eslint-disable-next-line no-console
-  console.error(err);
-  process.exit(1);
-});
-
-// Forward common termination signals to the child so that it shuts down
-// gracefully. In the handler we temporarily disable the default behavior of
-// exiting immediately; once the child has been signaled we simply wait for
-// its exit event which will in turn terminate the parent (see below).
-const forwardSignal = (signal) => {
-  if (child.killed) {
-    return;
+async function main() {
+  const additionalDirs = [];
+  const rgDir = await resolveRgDir();
+  if (rgDir) {
+    additionalDirs.push(rgDir);
   }
-  try {
-    child.kill(signal);
-  } catch {
-    /* ignore */
-  }
-};
+  const updatedPath = getUpdatedPath(additionalDirs);
 
-["SIGINT", "SIGTERM", "SIGHUP"].forEach((sig) => {
-  process.on(sig, () => forwardSignal(sig));
-});
-
-// When the child exits, mirror its termination reason in the parent so that
-// shell scripts and other tooling observe the correct exit status.
-// Wrap the lifetime of the child process in a Promise so that we can await
-// its termination in a structured way. The Promise resolves with an object
-// describing how the child exited: either via exit code or due to a signal.
-const childResult = await new Promise((resolve) => {
-  child.on("exit", (code, signal) => {
-    if (signal) {
-      resolve({ type: "signal", signal });
-    } else {
-      resolve({ type: "code", exitCode: code ?? 1 });
-    }
+  const child = spawn(binaryPath, process.argv.slice(2), {
+    stdio: "inherit",
+    env: { ...process.env, PATH: updatedPath, CODEX_MANAGED_BY_NPM: "1" },
   });
-});
 
-if (childResult.type === "signal") {
-  // Re-emit the same signal so that the parent terminates with the expected
-  // semantics (this also sets the correct exit code of 128 + n).
-  process.kill(process.pid, childResult.signal);
-} else {
-  process.exit(childResult.exitCode);
+  child.on("error", (err) => {
+    // Typically triggered when the binary is missing or not executable.
+    // Re-throwing here will terminate the parent with a non-zero exit code
+    // while still printing a helpful stack trace.
+    // eslint-disable-next-line no-console
+    console.error(err);
+    process.exit(1);
+  });
+
+  // Forward common termination signals to the child so that it shuts down
+  // gracefully. In the handler we temporarily disable the default behavior of
+  // exiting immediately; once the child has been signaled we simply wait for
+  // its exit event which will in turn terminate the parent (see below).
+  const forwardSignal = (signal) => {
+    if (child.killed) {
+      return;
+    }
+    try {
+      child.kill(signal);
+    } catch {
+      /* ignore */
+    }
+  };
+
+  ["SIGINT", "SIGTERM", "SIGHUP"].forEach((sig) => {
+    process.on(sig, () => forwardSignal(sig));
+  });
+
+  // When the child exits, mirror its termination reason in the parent so that
+  // shell scripts and other tooling observe the correct exit status.
+  // Wrap the lifetime of the child process in a Promise so that we can await
+  // its termination in a structured way. The Promise resolves with an object
+  // describing how the child exited: either via exit code or due to a signal.
+  const childResult = await new Promise((resolve) => {
+    child.on("exit", (code, signal) => {
+      if (signal) {
+        resolve({ type: "signal", signal });
+      } else {
+        resolve({ type: "code", exitCode: code ?? 1 });
+      }
+    });
+  });
+
+  if (childResult.type === "signal") {
+    // Re-emit the same signal so that the parent terminates with the expected
+    // semantics (this also sets the correct exit code of 128 + n).
+    process.kill(process.pid, childResult.signal);
+  } else {
+    process.exit(childResult.exitCode);
+  }
+}
+
+if (
+  process.argv[1] &&
+  import.meta.url === pathToFileURL(process.argv[1]).href
+) {
+  await main();
 }
