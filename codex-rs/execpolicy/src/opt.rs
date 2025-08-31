@@ -12,6 +12,7 @@ use starlark::values::StarlarkValue;
 use starlark::values::UnpackValue;
 use starlark::values::Value;
 use starlark::values::starlark_value;
+use starlark::values::type_repr::StarlarkTypeRepr;
 
 /// Command line option that takes a value.
 #[derive(Clone, Debug, Display, PartialEq, Eq, ProvidesStaticType, NoSerialize, Allocative)]
@@ -48,6 +49,15 @@ impl Opt {
     pub fn name(&self) -> &str {
         &self.opt
     }
+
+    /// Create an owned copy of this [`Opt`].
+    pub fn to_owned(&self) -> Self {
+        Self {
+            opt: self.opt.clone(),
+            meta: self.meta.clone(),
+            required: self.required,
+        }
+    }
 }
 
 #[starlark_value(type = "Opt")]
@@ -55,13 +65,27 @@ impl<'v> StarlarkValue<'v> for Opt {
     type Canonical = Opt;
 }
 
+impl<'v> UnpackValue<'v> for &'v Opt {
+    type Error = starlark::Error;
+
+    fn unpack_value_impl(value: Value<'v>) -> starlark::Result<Option<Self>> {
+        Ok(value.downcast_ref::<Opt>())
+    }
+}
+
+impl<'v> StarlarkTypeRepr for &'v Opt {
+    type Canonical = Opt;
+
+    fn starlark_type_repr() -> starlark::typing::Ty {
+        <Opt as StarlarkTypeRepr>::starlark_type_repr()
+    }
+}
+
 impl<'v> UnpackValue<'v> for Opt {
     type Error = starlark::Error;
 
     fn unpack_value_impl(value: Value<'v>) -> starlark::Result<Option<Self>> {
-        // TODO(mbolin): It fels like this should be doable without cloning?
-        // Cannot simply consume the value?
-        Ok(value.downcast_ref::<Opt>().cloned())
+        <&Opt>::unpack_value_impl(value).map(|opt| opt.map(Opt::to_owned))
     }
 }
 

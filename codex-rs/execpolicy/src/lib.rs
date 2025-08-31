@@ -23,7 +23,7 @@ pub use error::Error;
 pub use error::Result;
 pub use exec_call::ExecCall;
 pub use execv_checker::ExecvChecker;
-pub use opt::Opt;
+pub use opt::{Opt, OptMeta};
 pub use policy::Policy;
 pub use policy_parser::PolicyParser;
 pub use program::Forbidden;

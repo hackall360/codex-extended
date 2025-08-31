@@ -125,7 +125,7 @@ fn policy_builtins(builder: &mut GlobalsBuilder) {
         system_path: Option<UnpackList<String>>,
         option_bundling: Option<bool>,
         combined_format: Option<bool>,
-        options: Option<UnpackList<Opt>>,
+        options: Option<UnpackList<&'v Opt>>,
         args: Option<UnpackList<ArgMatcher>>,
         forbidden: Option<String>,
         should_match: Option<UnpackList<UnpackList<String>>>,
@@ -142,7 +142,7 @@ fn policy_builtins(builder: &mut GlobalsBuilder) {
         for opt in options {
             let name = opt.name().to_string();
             if allowed_options
-                .insert(opt.name().to_string(), opt)
+                .insert(name.clone(), opt.to_owned())
                 .is_some()
             {
                 return Err(anyhow::format_err!("duplicate flag: {name}"));
