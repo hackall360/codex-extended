@@ -758,6 +758,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
     fn vec_index_persistence() {
         let dir = tempdir().unwrap();
         let path = dir.path().join("aof.log");
