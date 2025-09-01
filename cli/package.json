@@ -1,0 +1,10 @@
+{
+  "name": "codex-cli",
+  "version": "0.1.0",
+  "bin": {
+    "codex": "src/index.js"
+  },
+  "scripts": {
+    "test": "node --test"
+  }
+}
