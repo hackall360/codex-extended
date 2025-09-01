@@ -1,0 +1,9 @@
+# Sample Codex server configuration
+backend_url = "http://localhost:8000"
+chat_model = "gpt-4o"
+embedding_model = "nomic-embed-text"
+store = "memory"
+data_path = "./data"
+port = 0
+# resp_port can be set to expose a raw RESP endpoint
+# resp_port = 6380
