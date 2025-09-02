@@ -4,7 +4,9 @@ use codex_common::CliConfigOverrides;
 use codex_core::config::Config;
 use codex_core::config::ConfigOverrides;
 use codex_core::exec_env::create_env;
+#[cfg(target_os = "linux")]
 use codex_core::landlock::spawn_command_under_linux_sandbox;
+#[cfg(target_os = "macos")]
 use codex_core::seatbelt::spawn_command_under_seatbelt;
 use codex_core::spawn::StdioPolicy;
 use codex_protocol::config_types::SandboxMode;
@@ -80,23 +82,43 @@ async fn run_command_under_sandbox(
 
     let mut child = match sandbox_type {
         SandboxType::Seatbelt => {
-            spawn_command_under_seatbelt(command, &config.sandbox_policy, cwd, stdio_policy, env)
+            #[cfg(target_os = "macos")]
+            {
+                spawn_command_under_seatbelt(
+                    command,
+                    &config.sandbox_policy,
+                    cwd,
+                    stdio_policy,
+                    env,
+                )
                 .await?
+            }
+            #[cfg(not(target_os = "macos"))]
+            {
+                anyhow::bail!("Seatbelt sandbox is only supported on macOS");
+            }
         }
         SandboxType::Landlock => {
-            #[expect(clippy::expect_used)]
-            let codex_linux_sandbox_exe = config
-                .codex_linux_sandbox_exe
-                .expect("codex-linux-sandbox executable not found");
-            spawn_command_under_linux_sandbox(
-                codex_linux_sandbox_exe,
-                command,
-                &config.sandbox_policy,
-                cwd,
-                stdio_policy,
-                env,
-            )
-            .await?
+            #[cfg(target_os = "linux")]
+            {
+                #[expect(clippy::expect_used)]
+                let codex_linux_sandbox_exe = config
+                    .codex_linux_sandbox_exe
+                    .expect("codex-linux-sandbox executable not found");
+                spawn_command_under_linux_sandbox(
+                    codex_linux_sandbox_exe,
+                    command,
+                    &config.sandbox_policy,
+                    cwd,
+                    stdio_policy,
+                    env,
+                )
+                .await?
+            }
+            #[cfg(not(target_os = "linux"))]
+            {
+                anyhow::bail!("Landlock sandbox is only supported on Linux");
+            }
         }
     };
     let status = child.wait().await?;

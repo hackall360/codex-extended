@@ -26,6 +26,7 @@ pub mod exec_env;
 mod flags;
 pub mod git_info;
 mod is_safe_command;
+#[cfg(target_os = "linux")]
 pub mod landlock;
 mod mcp_connection_manager;
 mod mcp_tool_call;
@@ -53,6 +54,7 @@ pub mod plan_tool;
 pub mod project_doc;
 mod rollout;
 pub(crate) mod safety;
+#[cfg(target_os = "macos")]
 pub mod seatbelt;
 pub mod shell;
 pub mod spawn;

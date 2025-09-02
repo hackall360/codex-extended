@@ -17,12 +17,14 @@ use tokio::process::Child;
 use crate::error::CodexErr;
 use crate::error::Result;
 use crate::error::SandboxErr;
+#[cfg(target_os = "linux")]
 use crate::landlock::spawn_command_under_linux_sandbox;
 use crate::protocol::Event;
 use crate::protocol::EventMsg;
 use crate::protocol::ExecCommandOutputDeltaEvent;
 use crate::protocol::ExecOutputStream;
 use crate::protocol::SandboxPolicy;
+#[cfg(target_os = "macos")]
 use crate::seatbelt::spawn_command_under_seatbelt;
 use crate::spawn::StdioPolicy;
 use crate::spawn::spawn_child_async;
@@ -97,40 +99,54 @@ pub async fn process_exec_tool_call(
     {
         SandboxType::None => exec(params, sandbox_policy, stdout_stream.clone()).await,
         SandboxType::MacosSeatbelt => {
-            let timeout = params.timeout_duration_opt();
-            let ExecParams {
-                command, cwd, env, ..
-            } = params;
-            let child = spawn_command_under_seatbelt(
-                command,
-                sandbox_policy,
-                cwd,
-                StdioPolicy::RedirectForShellTool,
-                env,
-            )
-            .await?;
-            consume_truncated_output(child, timeout, stdout_stream.clone()).await
+            #[cfg(target_os = "macos")]
+            {
+                let timeout = params.timeout_duration_opt();
+                let ExecParams {
+                    command, cwd, env, ..
+                } = params;
+                let child = spawn_command_under_seatbelt(
+                    command,
+                    sandbox_policy,
+                    cwd,
+                    StdioPolicy::RedirectForShellTool,
+                    env,
+                )
+                .await?;
+                consume_truncated_output(child, timeout, stdout_stream.clone()).await
+            }
+            #[cfg(not(target_os = "macos"))]
+            {
+                unimplemented!("Seatbelt sandbox is only supported on macOS");
+            }
         }
         SandboxType::LinuxSeccomp => {
-            let timeout = params.timeout_duration_opt();
-            let ExecParams {
-                command, cwd, env, ..
-            } = params;
+            #[cfg(target_os = "linux")]
+            {
+                let timeout = params.timeout_duration_opt();
+                let ExecParams {
+                    command, cwd, env, ..
+                } = params;
 
-            let codex_linux_sandbox_exe = codex_linux_sandbox_exe
-                .as_ref()
-                .ok_or(CodexErr::LandlockSandboxExecutableNotProvided)?;
-            let child = spawn_command_under_linux_sandbox(
-                codex_linux_sandbox_exe,
-                command,
-                sandbox_policy,
-                cwd,
-                StdioPolicy::RedirectForShellTool,
-                env,
-            )
-            .await?;
+                let codex_linux_sandbox_exe = codex_linux_sandbox_exe
+                    .as_ref()
+                    .ok_or(CodexErr::LandlockSandboxExecutableNotProvided)?;
+                let child = spawn_command_under_linux_sandbox(
+                    codex_linux_sandbox_exe,
+                    command,
+                    sandbox_policy,
+                    cwd,
+                    StdioPolicy::RedirectForShellTool,
+                    env,
+                )
+                .await?;
 
-            consume_truncated_output(child, timeout, stdout_stream).await
+                consume_truncated_output(child, timeout, stdout_stream).await
+            }
+            #[cfg(not(target_os = "linux"))]
+            {
+                unimplemented!("Linux seccomp sandbox is only supported on Linux");
+            }
         }
     };
     let duration = start.elapsed();
