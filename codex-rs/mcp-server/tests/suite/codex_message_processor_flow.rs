@@ -347,9 +347,11 @@ async fn test_send_user_turn_changes_approval_policy_behavior() {
     .expect("task_complete 2 notification");
 }
 
+#[cfg(unix)]
 #[test]
 fn test_invalid_path_serialization_fails() {
     use std::ffi::OsString;
+    #[cfg(unix)]
     use std::os::unix::ffi::OsStringExt;
 
     let invalid = OsString::from_vec(vec![0xff]);
