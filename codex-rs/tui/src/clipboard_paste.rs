@@ -178,6 +178,7 @@ mod pasted_paths_tests {
         assert_eq!(result, PathBuf::from("/tmp/example.png"));
     }
 
+    #[cfg(windows)]
     #[test]
     fn normalize_file_url_windows() {
         let input = r"C:\Temp\example.png";
