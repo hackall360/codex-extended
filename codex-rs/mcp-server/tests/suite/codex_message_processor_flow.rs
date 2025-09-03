@@ -7,7 +7,6 @@ use codex_core::protocol_config_types::ReasoningSummary;
 use codex_core::spawn::CODEX_SANDBOX_NETWORK_DISABLED_ENV_VAR;
 use codex_protocol::mcp_protocol::AddConversationListenerParams;
 use codex_protocol::mcp_protocol::AddConversationSubscriptionResponse;
-use codex_protocol::mcp_protocol::EXEC_COMMAND_APPROVAL_METHOD;
 use codex_protocol::mcp_protocol::NewConversationParams;
 use codex_protocol::mcp_protocol::NewConversationResponse;
 use codex_protocol::mcp_protocol::RemoveConversationListenerParams;
@@ -16,11 +15,12 @@ use codex_protocol::mcp_protocol::SendUserMessageParams;
 use codex_protocol::mcp_protocol::SendUserMessageResponse;
 use codex_protocol::mcp_protocol::SendUserTurnParams;
 use codex_protocol::mcp_protocol::SendUserTurnResponse;
-use mcp_test_support::McpProcess;
+use codex_protocol::mcp_protocol::EXEC_COMMAND_APPROVAL_METHOD;
 use mcp_test_support::create_final_assistant_message_sse_response;
 use mcp_test_support::create_mock_chat_completions_server;
 use mcp_test_support::create_shell_sse_response;
 use mcp_test_support::to_response;
+use mcp_test_support::McpProcess;
 use mcp_types::JSONRPCNotification;
 use mcp_types::JSONRPCResponse;
 use mcp_types::RequestId;
@@ -351,12 +351,18 @@ async fn test_send_user_turn_changes_approval_policy_behavior() {
 #[test]
 fn test_invalid_path_serialization_fails() {
     use std::ffi::OsString;
-    #[cfg(unix)]
     use std::os::unix::ffi::OsStringExt;
 
     let invalid = OsString::from_vec(vec![0xff]);
     let path = std::path::PathBuf::from(invalid);
     assert!(serde_json::to_value(&path).is_err());
+}
+
+#[cfg(not(unix))]
+#[test]
+fn test_invalid_path_serialization_fails() {
+    // This test is not applicable on non-Unix platforms but is present
+    // to ensure the test suite compiles everywhere.
 }
 
 #[tokio::test]
