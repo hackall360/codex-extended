@@ -440,6 +440,9 @@ const DEFAULT_ENV_VARS: &[&str] = &[
     "TMP",
 ];
 
+#[cfg(not(any(unix, windows)))]
+const DEFAULT_ENV_VARS: &[&str] = &[];
+
 /// `extra_env` comes from the config for an entry in `mcp_servers` in
 /// `config.toml`.
 fn create_env_for_mcp_server(
