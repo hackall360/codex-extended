@@ -1,0 +1,5 @@
+chore: docs + rag model role
+
+- Add docs for orchestration model selection
+- Add answer_model_role to RAG agent
+- Provider/endpoint configurability notes

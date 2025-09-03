@@ -115,3 +115,30 @@ Server/Client split
 - Pass `model_role` (coding agent) or `answer_model_role` (rag agent) to choose models per call or DAG node.
 - For AutoGen DAG nodes, specify `provider_id` and `model` or `base_url` to point to local/OSS endpoints.
 - Embeddings endpoint can be set via `CODEX_SERVER_URL`; configure codex-server to use your desired embedding model.
+
+### Examples
+
+Define model roles for orchestration:
+
+```toml
+[model_roles.coding]
+model = "qwen2.5-coder"
+provider = "oss_ollama"  # must exist in [model_providers]
+
+[model_roles.rag_answer]
+model = "gpt-4o-mini"
+provider = "openai"
+```
+
+Use agents with explicit roles:
+
+- Coding: `invoke_coding_agent({"task":"Refactor module","model_role":"coding"})`
+- RAG: `invoke_rag_agent({"question":"Explain X","answer_model_role":"rag_answer","include_web":true})`
+
+Embeddings endpoint (client side):
+
+```shell
+export CODEX_SERVER_URL=http://localhost:8080
+```
+
+codex-server (server side) embedding model selection depends on its `backend_url` and server configuration. Point it at your local models (e.g., Ollama) or API providers, and it will serve embeddings via `/v1/embeddings`.
