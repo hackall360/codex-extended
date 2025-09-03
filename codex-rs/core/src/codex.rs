@@ -2256,6 +2256,73 @@ async fn handle_function_call(
                 },
             }
         }
+        "invoke_coding_agent" => {
+            #[derive(serde::Deserialize)]
+            struct Args { task: String, #[serde(default)] model_role: Option<String> }
+            let args = match serde_json::from_str::<Args>(&arguments) { Ok(a) => a, Err(e) => {
+                return ResponseInputItem::FunctionCallOutput { call_id, output: FunctionCallOutputPayload { content: format!("failed to parse function arguments: {e}"), success: Some(false) } };
+            }};
+            let cfg = turn_context.client.get_config();
+            let ctx = crate::agents::AgentContext { config: &cfg };
+            let result = crate::agents::invoke_coding_agent(ctx, &args.task, args.model_role.as_deref()).await;
+            let payload = match result { Ok(r) => FunctionCallOutputPayload { content: r.to_json_string(), success: Some(true) }, Err(e) => FunctionCallOutputPayload { content: e.to_string(), success: Some(false) } };
+            ResponseInputItem::FunctionCallOutput { call_id, output: payload }
+        }
+        "invoke_file_search_agent" => {
+            #[derive(serde::Deserialize)]
+            struct Args { query: String, #[serde(default)] limit: Option<usize>, #[serde(default)] level: Option<String> }
+            let args = match serde_json::from_str::<Args>(&arguments) { Ok(a) => a, Err(e) => {
+                return ResponseInputItem::FunctionCallOutput { call_id, output: FunctionCallOutputPayload { content: format!("failed to parse function arguments: {e}"), success: Some(false) } };
+            }};
+            let cfg = turn_context.client.get_config();
+            let ctx = crate::agents::AgentContext { config: &cfg };
+            let result = crate::agents::invoke_file_search_agent(ctx, &args.query, args.limit, args.level.as_deref()).await;
+            let payload = match result { Ok(r) => FunctionCallOutputPayload { content: r.to_json_string(), success: Some(true) }, Err(e) => FunctionCallOutputPayload { content: e.to_string(), success: Some(false) } };
+            ResponseInputItem::FunctionCallOutput { call_id, output: payload }
+        }
+        "invoke_web_search_agent" => {
+            #[derive(serde::Deserialize)]
+            struct Args { query: String, #[serde(default)] top_k: Option<usize>, #[serde(default)] mode: Option<String> }
+            let args = match serde_json::from_str::<Args>(&arguments) { Ok(a) => a, Err(e) => {
+                return ResponseInputItem::FunctionCallOutput { call_id, output: FunctionCallOutputPayload { content: format!("failed to parse function arguments: {e}"), success: Some(false) } };
+            }};
+            let cfg = turn_context.client.get_config();
+            let ctx = crate::agents::AgentContext { config: &cfg };
+            let result = crate::agents::invoke_web_search_agent(ctx, &args.query, args.top_k, args.mode.as_deref()).await;
+            let payload = match result { Ok(r) => FunctionCallOutputPayload { content: r.to_json_string(), success: Some(true) }, Err(e) => FunctionCallOutputPayload { content: e.to_string(), success: Some(false) } };
+            ResponseInputItem::FunctionCallOutput { call_id, output: payload }
+        }
+        "invoke_rag_agent" => {
+            #[derive(serde::Deserialize)]
+            struct Args { question: String, #[serde(default)] top_k: Option<usize>, #[serde(default)] level: Option<String>, #[serde(default)] include_web: Option<bool>, #[serde(default)] include_local: Option<bool> }
+            let args = match serde_json::from_str::<Args>(&arguments) { Ok(a) => a, Err(e) => {
+                return ResponseInputItem::FunctionCallOutput { call_id, output: FunctionCallOutputPayload { content: format!("failed to parse function arguments: {e}"), success: Some(false) } };
+            }};
+            let cfg = turn_context.client.get_config();
+            let ctx = crate::agents::AgentContext { config: &cfg };
+            let result = crate::agents::invoke_rag_agent(
+                ctx,
+                &args.question,
+                args.top_k,
+                args.level.as_deref(),
+                args.include_web.unwrap_or(true),
+                args.include_local.unwrap_or(true),
+            ).await;
+            let payload = match result { Ok(r) => FunctionCallOutputPayload { content: r.to_json_string(), success: Some(true) }, Err(e) => FunctionCallOutputPayload { content: e.to_string(), success: Some(false) } };
+            ResponseInputItem::FunctionCallOutput { call_id, output: payload }
+        }
+        "invoke_dag_agent" => {
+            #[derive(serde::Deserialize)]
+            struct Args { nodes: serde_json::Value, edges: serde_json::Value }
+            let args = match serde_json::from_str::<Args>(&arguments) { Ok(a) => a, Err(e) => {
+                return ResponseInputItem::FunctionCallOutput { call_id, output: FunctionCallOutputPayload { content: format!("failed to parse function arguments: {e}"), success: Some(false) } };
+            }};
+            let cfg = turn_context.client.get_config();
+            let ctx = crate::agents::AgentContext { config: &cfg };
+            let result = crate::agents::invoke_dag_agent(ctx, args.nodes, args.edges).await;
+            let payload = match result { Ok(r) => FunctionCallOutputPayload { content: r.to_json_string(), success: Some(true) }, Err(e) => FunctionCallOutputPayload { content: e.to_string(), success: Some(false) } };
+            ResponseInputItem::FunctionCallOutput { call_id, output: payload }
+        }
         "update_plan" => handle_update_plan(sess, arguments, sub_id, call_id).await,
         EXEC_COMMAND_TOOL_NAME => {
             // TODO(mbolin): Sandbox check.

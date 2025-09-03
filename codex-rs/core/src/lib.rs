@@ -26,6 +26,7 @@ pub mod exec_env;
 mod flags;
 pub mod git_info;
 mod is_safe_command;
+pub mod agents;
 #[cfg(target_os = "linux")]
 pub mod landlock;
 mod mcp_connection_manager;

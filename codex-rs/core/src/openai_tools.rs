@@ -712,6 +712,13 @@ pub(crate) fn get_openai_tools(
     tools.push(create_quadratic_solve_tool());
     tools.push(create_matrix_det_tool());
 
+    // Multi-agent orchestration: manager can delegate to built-in agents.
+    tools.push(OpenAiTool::Function(create_invoke_coding_agent_tool()));
+    tools.push(OpenAiTool::Function(create_invoke_file_search_agent_tool()));
+    tools.push(OpenAiTool::Function(create_invoke_web_search_agent_tool()));
+    tools.push(OpenAiTool::Function(create_invoke_rag_agent_tool()));
+    tools.push(OpenAiTool::Function(create_invoke_dag_agent_tool()));
+
     if let Some(mcp_tools) = mcp_tools {
         // Ensure deterministic ordering to maximize prompt cache hits.
         // HashMap iteration order is non-deterministic, so sort by fully-qualified tool name.
@@ -729,6 +736,117 @@ pub(crate) fn get_openai_tools(
     }
 
     tools
+}
+
+fn create_invoke_coding_agent_tool() -> ResponsesApiTool {
+    let mut properties = BTreeMap::new();
+    properties.insert(
+        "task".to_string(),
+        JsonSchema::String { description: Some("Coding task or goal to accomplish".to_string()) },
+    );
+    properties.insert(
+        "model_role".to_string(),
+        JsonSchema::String { description: Some("Optional model role to use for the coding agent".to_string()) },
+    );
+    ResponsesApiTool {
+        name: "invoke_coding_agent".to_string(),
+        description: "Invoke a subordinate coding agent that can execute and apply patches autonomously".to_string(),
+        strict: false,
+        parameters: JsonSchema::Object { properties, required: Some(vec!["task".to_string()]), additional_properties: Some(false) },
+    }
+}
+
+fn create_invoke_file_search_agent_tool() -> ResponsesApiTool {
+    let mut properties = BTreeMap::new();
+    properties.insert(
+        "query".to_string(),
+        JsonSchema::String { description: Some("Fuzzy search query across project files".to_string()) },
+    );
+    properties.insert(
+        "limit".to_string(),
+        JsonSchema::Number { description: Some("Max results to return (default 50)".to_string()) },
+    );
+    properties.insert(
+        "level".to_string(),
+        JsonSchema::String { description: Some("Local search level: small|medium|codebase|extra|full".to_string()) },
+    );
+    ResponsesApiTool {
+        name: "invoke_file_search_agent".to_string(),
+        description: "Search files in the current workspace and return ranked matches".to_string(),
+        strict: false,
+        parameters: JsonSchema::Object { properties, required: Some(vec!["query".to_string()]), additional_properties: Some(false) },
+    }
+}
+
+fn create_invoke_web_search_agent_tool() -> ResponsesApiTool {
+    let mut properties = BTreeMap::new();
+    properties.insert(
+        "query".to_string(),
+        JsonSchema::String { description: Some("Web search query".to_string()) },
+    );
+    properties.insert(
+        "top_k".to_string(),
+        JsonSchema::Number { description: Some("Max results to return (default 5)".to_string()) },
+    );
+    properties.insert(
+        "mode".to_string(),
+        JsonSchema::String { description: Some("normal|deep|research".to_string()) },
+    );
+    ResponsesApiTool {
+        name: "invoke_web_search_agent".to_string(),
+        description: "Search the web via configured provider and return summary".to_string(),
+        strict: false,
+        parameters: JsonSchema::Object { properties, required: Some(vec!["query".to_string()]), additional_properties: Some(false) },
+    }
+}
+
+fn create_invoke_rag_agent_tool() -> ResponsesApiTool {
+    let mut properties = BTreeMap::new();
+    properties.insert(
+        "question".to_string(),
+        JsonSchema::String { description: Some("Question to answer using retrieval".to_string()) },
+    );
+    properties.insert(
+        "top_k".to_string(),
+        JsonSchema::Number { description: Some("Top-K contexts to retrieve".to_string()) },
+    );
+    properties.insert(
+        "level".to_string(),
+        JsonSchema::String { description: Some("Local search level: small|medium|codebase|extra|full".to_string()) },
+    );
+    properties.insert(
+        "include_web".to_string(),
+        JsonSchema::Boolean { description: Some("Include web results in retrieval".to_string()) },
+    );
+    properties.insert(
+        "include_local".to_string(),
+        JsonSchema::Boolean { description: Some("Include local files in retrieval".to_string()) },
+    );
+    ResponsesApiTool {
+        name: "invoke_rag_agent".to_string(),
+        description: "Answer questions using retrieval-augmented generation".to_string(),
+        strict: false,
+        parameters: JsonSchema::Object { properties, required: Some(vec!["question".to_string()]), additional_properties: Some(false) },
+    }
+}
+
+fn create_invoke_dag_agent_tool() -> ResponsesApiTool {
+    let mut properties = BTreeMap::new();
+    // Free-form nodes/edges; allow additional properties.
+    properties.insert(
+        "nodes".to_string(),
+        JsonSchema::Object { properties: BTreeMap::new(), required: None, additional_properties: Some(true) },
+    );
+    properties.insert(
+        "edges".to_string(),
+        JsonSchema::Object { properties: BTreeMap::new(), required: None, additional_properties: Some(true) },
+    );
+    ResponsesApiTool {
+        name: "invoke_dag_agent".to_string(),
+        description: "Execute a DAG of agent tasks; nodes and edges specify flow".to_string(),
+        strict: false,
+        parameters: JsonSchema::Object { properties, required: Some(vec!["nodes".to_string(), "edges".to_string()]), additional_properties: Some(true) },
+    }
 }
 
 #[cfg(test)]

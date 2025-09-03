@@ -141,6 +141,9 @@ pub(crate) async fn stream_chat_completions(
         "model": model_family.slug,
         "messages": messages,
         "stream": true,
+        // Some providers require explicit tool selection flags
+        "tool_choice": "auto",
+        "parallel_tool_calls": false,
         "tools": tools_json,
     });
 
@@ -355,36 +358,62 @@ async fn process_chat_sse<S>(
             }
 
             // Handle streaming function / tool calls.
+            // Providers vary: some stream under `delta.tool_calls`, others under
+            // `delta.function_call` (legacy), and some only provide the final
+            // function information in `message.tool_calls` at turn end. We collect
+            // any incremental pieces here; the finish_reason branch below will
+            // also check the non-delta `message.*` fields as a fallback.
+
+            // Variant A: OpenAI-style tool_calls deltas
             if let Some(tool_calls) = choice
                 .get("delta")
                 .and_then(|d| d.get("tool_calls"))
                 .and_then(|tc| tc.as_array())
                 && let Some(tool_call) = tool_calls.first()
             {
-                // Mark that we have an active function call in progress.
                 fn_call_state.active = true;
-
-                // Extract call_id if present.
                 if let Some(id) = tool_call.get("id").and_then(|v| v.as_str()) {
-                    fn_call_state.call_id.get_or_insert_with(|| id.to_string());
+                    fn_call_state
+                        .call_id
+                        .get_or_insert_with(|| id.to_string());
                 }
-
-                // Extract function details if present.
                 if let Some(function) = tool_call.get("function") {
                     if let Some(name) = function.get("name").and_then(|n| n.as_str()) {
-                        fn_call_state.name.get_or_insert_with(|| name.to_string());
+                        fn_call_state
+                            .name
+                            .get_or_insert_with(|| name.to_string());
                     }
-
-                    if let Some(args_fragment) = function.get("arguments").and_then(|a| a.as_str())
+                    if let Some(args_fragment) =
+                        function.get("arguments").and_then(|a| a.as_str())
                     {
                         fn_call_state.arguments.push_str(args_fragment);
                     }
                 }
             }
 
+            // Variant B: legacy `function_call` deltas
+            if let Some(function_call) = choice
+                .get("delta")
+                .and_then(|d| d.get("function_call"))
+                .and_then(|fc| fc.as_object())
+            {
+                fn_call_state.active = true;
+                if let Some(name) = function_call.get("name").and_then(|n| n.as_str()) {
+                    fn_call_state
+                        .name
+                        .get_or_insert_with(|| name.to_string());
+                }
+                if let Some(args_fragment) =
+                    function_call.get("arguments").and_then(|a| a.as_str())
+                {
+                    fn_call_state.arguments.push_str(args_fragment);
+                }
+            }
+
             // Emit end-of-turn when finish_reason signals completion.
             if let Some(finish_reason) = choice.get("finish_reason").and_then(|v| v.as_str()) {
                 match finish_reason {
+                    // OpenAI-style tool call termination
                     "tool_calls" if fn_call_state.active => {
                         // First, flush the terminal raw reasoning so UIs can finalize
                         // the reasoning stream before any exec/tool events begin.
@@ -408,6 +437,28 @@ async fn process_chat_sse<S>(
                             call_id: fn_call_state.call_id.clone().unwrap_or_else(String::new),
                         };
 
+                        let _ = tx_event.send(Ok(ResponseEvent::OutputItemDone(item))).await;
+                    }
+                    // Legacy function_call termination used by some providers
+                    "function_call" if fn_call_state.active => {
+                        if !reasoning_text.is_empty() {
+                            let item = ResponseItem::Reasoning {
+                                id: String::new(),
+                                summary: Vec::new(),
+                                content: Some(vec![ReasoningItemContent::ReasoningText {
+                                    text: std::mem::take(&mut reasoning_text),
+                                }]),
+                                encrypted_content: None,
+                            };
+                            let _ = tx_event.send(Ok(ResponseEvent::OutputItemDone(item))).await;
+                        }
+
+                        let item = ResponseItem::FunctionCall {
+                            id: None,
+                            name: fn_call_state.name.clone().unwrap_or_else(|| "".to_string()),
+                            arguments: fn_call_state.arguments.clone(),
+                            call_id: fn_call_state.call_id.clone().unwrap_or_else(String::new),
+                        };
                         let _ = tx_event.send(Ok(ResponseEvent::OutputItemDone(item))).await;
                     }
                     "stop" => {
@@ -437,6 +488,78 @@ async fn process_chat_sse<S>(
                         }
                     }
                     _ => {}
+                }
+
+                // If the provider did not stream tool calls but attached them as
+                // a complete `message.tool_calls` or `message.function_call`, emit
+                // the FunctionCall once here before completing.
+                if !fn_call_state.active {
+                    if let Some(msg_obj) = choice.get("message").and_then(|m| m.as_object()) {
+                        // Prefer tool_calls if present
+                        if let Some(tool_calls) = msg_obj.get("tool_calls").and_then(|tc| tc.as_array())
+                        {
+                            if let Some(tool_call) = tool_calls.first() {
+                                let call_id = tool_call
+                                    .get("id")
+                                    .and_then(|v| v.as_str())
+                                    .unwrap_or("")
+                                    .to_string();
+                                let (name, args) = if let Some(function) =
+                                    tool_call.get("function").and_then(|f| f.as_object())
+                                {
+                                    let name = function
+                                        .get("name")
+                                        .and_then(|n| n.as_str())
+                                        .unwrap_or("")
+                                        .to_string();
+                                    let args = function
+                                        .get("arguments")
+                                        .and_then(|a| a.as_str())
+                                        .unwrap_or("")
+                                        .to_string();
+                                    (name, args)
+                                } else {
+                                    (String::new(), String::new())
+                                };
+
+                                if !name.is_empty() || !args.is_empty() {
+                                    let item = ResponseItem::FunctionCall {
+                                        id: None,
+                                        name,
+                                        arguments: args,
+                                        call_id,
+                                    };
+                                    let _ = tx_event
+                                        .send(Ok(ResponseEvent::OutputItemDone(item)))
+                                        .await;
+                                }
+                            }
+                        } else if let Some(function_call) =
+                            msg_obj.get("function_call").and_then(|f| f.as_object())
+                        {
+                            let name = function_call
+                                .get("name")
+                                .and_then(|n| n.as_str())
+                                .unwrap_or("")
+                                .to_string();
+                            let args = function_call
+                                .get("arguments")
+                                .and_then(|a| a.as_str())
+                                .unwrap_or("")
+                                .to_string();
+                            if !name.is_empty() || !args.is_empty() {
+                                let item = ResponseItem::FunctionCall {
+                                    id: None,
+                                    name,
+                                    arguments: args,
+                                    call_id: String::new(),
+                                };
+                                let _ = tx_event
+                                    .send(Ok(ResponseEvent::OutputItemDone(item)))
+                                    .await;
+                            }
+                        }
+                    }
                 }
 
                 // Emit Completed regardless of reason so the agent can advance.

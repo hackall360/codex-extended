@@ -80,32 +80,39 @@ async fn run_command_under_sandbox(
     let stdio_policy = StdioPolicy::Inherit;
     let env = create_env(&config.shell_environment_policy);
 
-    let mut child = match sandbox_type {
+    // Explicitly annotate the child type to satisfy type checking across cfg branches.
+    let mut child: tokio::process::Child;
+
+    match sandbox_type {
         SandboxType::Seatbelt => {
+            #[cfg(not(target_os = "macos"))]
+            {
+                anyhow::bail!("Seatbelt sandbox is only supported on macOS");
+            }
             #[cfg(target_os = "macos")]
             {
-                spawn_command_under_seatbelt(
+                child = spawn_command_under_seatbelt(
                     command,
                     &config.sandbox_policy,
                     cwd,
                     stdio_policy,
                     env,
                 )
-                .await?
-            }
-            #[cfg(not(target_os = "macos"))]
-            {
-                anyhow::bail!("Seatbelt sandbox is only supported on macOS");
+                .await?;
             }
         }
         SandboxType::Landlock => {
+            #[cfg(not(target_os = "linux"))]
+            {
+                anyhow::bail!("Landlock sandbox is only supported on Linux");
+            }
             #[cfg(target_os = "linux")]
             {
                 #[expect(clippy::expect_used)]
                 let codex_linux_sandbox_exe = config
                     .codex_linux_sandbox_exe
                     .expect("codex-linux-sandbox executable not found");
-                spawn_command_under_linux_sandbox(
+                child = spawn_command_under_linux_sandbox(
                     codex_linux_sandbox_exe,
                     command,
                     &config.sandbox_policy,
@@ -113,14 +120,10 @@ async fn run_command_under_sandbox(
                     stdio_policy,
                     env,
                 )
-                .await?
-            }
-            #[cfg(not(target_os = "linux"))]
-            {
-                anyhow::bail!("Landlock sandbox is only supported on Linux");
+                .await?;
             }
         }
-    };
+    }
     let status = child.wait().await?;
 
     handle_exit_status(status);
