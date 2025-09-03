@@ -2294,7 +2294,7 @@ async fn handle_function_call(
         }
         "invoke_rag_agent" => {
             #[derive(serde::Deserialize)]
-            struct Args { question: String, #[serde(default)] top_k: Option<usize>, #[serde(default)] level: Option<String>, #[serde(default)] include_web: Option<bool>, #[serde(default)] include_local: Option<bool> }
+            struct Args { question: String, #[serde(default)] top_k: Option<usize>, #[serde(default)] level: Option<String>, #[serde(default)] include_web: Option<bool>, #[serde(default)] include_local: Option<bool>, #[serde(default)] answer_model_role: Option<String> }
             let args = match serde_json::from_str::<Args>(&arguments) { Ok(a) => a, Err(e) => {
                 return ResponseInputItem::FunctionCallOutput { call_id, output: FunctionCallOutputPayload { content: format!("failed to parse function arguments: {e}"), success: Some(false) } };
             }};
@@ -2307,6 +2307,7 @@ async fn handle_function_call(
                 args.level.as_deref(),
                 args.include_web.unwrap_or(true),
                 args.include_local.unwrap_or(true),
+                args.answer_model_role.as_deref(),
             ).await;
             let payload = match result { Ok(r) => FunctionCallOutputPayload { content: r.to_json_string(), success: Some(true) }, Err(e) => FunctionCallOutputPayload { content: e.to_string(), success: Some(false) } };
             ResponseInputItem::FunctionCallOutput { call_id, output: payload }

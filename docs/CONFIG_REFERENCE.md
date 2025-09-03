@@ -109,3 +109,9 @@ Server/Client split
 - Client (TUI/CLI/core) performs all local file/search/exec operations. Configure CODEX_SERVER_URL on the client to delegate embeddings to the server.
 - Terminal executions and file edits occur exclusively on the client’s system by design.
 
+
+### Orchestration Model Selection
+- Use `model_roles` in config.toml to define named roles (model + optional provider).
+- Pass `model_role` (coding agent) or `answer_model_role` (rag agent) to choose models per call or DAG node.
+- For AutoGen DAG nodes, specify `provider_id` and `model` or `base_url` to point to local/OSS endpoints.
+- Embeddings endpoint can be set via `CODEX_SERVER_URL`; configure codex-server to use your desired embedding model.

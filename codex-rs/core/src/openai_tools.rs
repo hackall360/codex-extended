@@ -822,6 +822,10 @@ fn create_invoke_rag_agent_tool() -> ResponsesApiTool {
         "include_local".to_string(),
         JsonSchema::Boolean { description: Some("Include local files in retrieval".to_string()) },
     );
+    properties.insert(
+        "answer_model_role".to_string(),
+        JsonSchema::String { description: Some("Optional model_role to use for the answer synthesis step".to_string()) },
+    );
     ResponsesApiTool {
         name: "invoke_rag_agent".to_string(),
         description: "Answer questions using retrieval-augmented generation".to_string(),

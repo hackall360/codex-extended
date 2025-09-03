@@ -72,8 +72,9 @@ pub async fn invoke_rag_agent(
     level: Option<&str>,
     include_web: bool,
     include_local: bool,
+    answer_model_role: Option<&str>,
 ) -> Result<AgentResult> {
-    builtin::rag::run_rag_agent(ctx, question, top_k, level, include_web, include_local).await
+    builtin::rag::run_rag_agent(ctx, question, top_k, level, include_web, include_local, answer_model_role).await
 }
 
 pub async fn invoke_dag_agent(

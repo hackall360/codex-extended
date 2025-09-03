@@ -193,6 +193,7 @@ pub mod rag {
         level: Option<&str>,
         include_web: bool,
         include_local: bool,
+        answer_model_role: Option<&str>,
     ) -> Result<AgentResult> {
         let k = top_k.unwrap_or(5);
         let mut contexts: Vec<(String, String)> = Vec::new();
@@ -224,6 +225,7 @@ pub mod rag {
             for d in docs { contexts.push((d.url, d.text)); }
         }
 
+        // Prefer config field (future), then env var for embeddings endpoint.
         let base = std::env::var("CODEX_SERVER_URL").ok();
         let client = reqwest::Client::new();
         let mut scored: Vec<(f32, String, String)> = Vec::new();
@@ -256,6 +258,20 @@ pub mod rag {
         let codex_home = crate::config::find_codex_home()?;
         let auth_manager = AuthManager::shared(codex_home, ctx.config.preferred_auth_method);
         let mut nested_cfg = ctx.config.clone();
+        // Allow answer synthesis model override using a model_role mapping.
+        if let Some(role_name) = answer_model_role {
+            if let Some(role) = ctx.config.model_roles.get(role_name) {
+                nested_cfg.model = role.model.clone();
+                nested_cfg.model_family = crate::model_family::find_family_for_model(&nested_cfg.model)
+                    .unwrap_or_else(|| ctx.config.model_family.clone());
+                if let Some(provider_id) = &role.provider {
+                    nested_cfg.model_provider_id = provider_id.clone();
+                    if let Some(info) = ctx.config.model_providers.get(provider_id) {
+                        nested_cfg.model_provider = info.clone();
+                    }
+                }
+            }
+        }
         nested_cfg.base_instructions = Some(sys.clone());
         let CodexSpawnOk { codex, .. } = Codex::spawn(nested_cfg, auth_manager, None).await?;
         codex
