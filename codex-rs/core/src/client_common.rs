@@ -189,7 +189,7 @@ impl Stream for ResponseStream {
 
 #[cfg(test)]
 mod tests {
-    use crate::model_family::find_family_for_model;
+    use crate::model_family::{built_in_model_capabilities, find_family_for_model};
 
     use super::*;
 
@@ -199,7 +199,8 @@ mod tests {
             ..Default::default()
         };
         let expected = format!("{BASE_INSTRUCTIONS}\n{APPLY_PATCH_TOOL_INSTRUCTIONS}");
-        let model_family = find_family_for_model("gpt-4.1").expect("known model slug");
+        let model_family =
+            find_family_for_model("gpt-4.1", built_in_model_capabilities()).expect("known model slug");
         let full = prompt.get_full_instructions(&model_family);
         assert_eq!(full, expected);
     }
