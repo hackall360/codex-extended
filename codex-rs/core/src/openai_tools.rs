@@ -855,7 +855,7 @@ fn create_invoke_dag_agent_tool() -> ResponsesApiTool {
 
 #[cfg(test)]
 mod tests {
-    use crate::model_family::find_family_for_model;
+    use crate::model_family::{built_in_model_capabilities, find_family_for_model};
     use mcp_types::ToolInputSchema;
     use pretty_assertions::assert_eq;
     use std::collections::BTreeMap;
@@ -888,8 +888,11 @@ mod tests {
 
     #[test]
     fn test_get_openai_tools() {
-        let model_family = find_family_for_model("codex-mini-latest")
-            .expect("codex-mini-latest should be a valid model family");
+        let model_family = find_family_for_model(
+            "codex-mini-latest",
+            built_in_model_capabilities(),
+        )
+        .expect("codex-mini-latest should be a valid model family");
         let config = ToolsConfig::new(&ToolsConfigParams {
             model_family: &model_family,
             approval_policy: AskForApproval::Never,
@@ -918,7 +921,8 @@ mod tests {
 
     #[test]
     fn test_get_openai_tools_default_shell() {
-        let model_family = find_family_for_model("o3").expect("o3 should be a valid model family");
+        let model_family =
+            find_family_for_model("o3", built_in_model_capabilities()).expect("o3 should be a valid model family");
         let config = ToolsConfig::new(&ToolsConfigParams {
             model_family: &model_family,
             approval_policy: AskForApproval::Never,
@@ -947,7 +951,8 @@ mod tests {
 
     #[test]
     fn test_get_openai_tools_mcp_tools() {
-        let model_family = find_family_for_model("o3").expect("o3 should be a valid model family");
+        let model_family =
+            find_family_for_model("o3", built_in_model_capabilities()).expect("o3 should be a valid model family");
         let config = ToolsConfig::new(&ToolsConfigParams {
             model_family: &model_family,
             approval_policy: AskForApproval::Never,
@@ -1055,7 +1060,8 @@ mod tests {
 
     #[test]
     fn test_get_openai_tools_mcp_tools_sorted_by_name() {
-        let model_family = find_family_for_model("o3").expect("o3 should be a valid model family");
+        let model_family =
+            find_family_for_model("o3", built_in_model_capabilities()).expect("o3 should be a valid model family");
         let config = ToolsConfig::new(&ToolsConfigParams {
             model_family: &model_family,
             approval_policy: AskForApproval::Never,
@@ -1135,7 +1141,8 @@ mod tests {
 
     #[test]
     fn test_mcp_tool_property_missing_type_defaults_to_string() {
-        let model_family = find_family_for_model("o3").expect("o3 should be a valid model family");
+        let model_family =
+            find_family_for_model("o3", built_in_model_capabilities()).expect("o3 should be a valid model family");
         let config = ToolsConfig::new(&ToolsConfigParams {
             model_family: &model_family,
             approval_policy: AskForApproval::Never,
@@ -1205,7 +1212,8 @@ mod tests {
 
     #[test]
     fn test_mcp_tool_integer_normalized_to_number() {
-        let model_family = find_family_for_model("o3").expect("o3 should be a valid model family");
+        let model_family =
+            find_family_for_model("o3", built_in_model_capabilities()).expect("o3 should be a valid model family");
         let config = ToolsConfig::new(&ToolsConfigParams {
             model_family: &model_family,
             approval_policy: AskForApproval::Never,
@@ -1270,7 +1278,8 @@ mod tests {
 
     #[test]
     fn test_mcp_tool_array_without_items_gets_default_string_items() {
-        let model_family = find_family_for_model("o3").expect("o3 should be a valid model family");
+        let model_family =
+            find_family_for_model("o3", built_in_model_capabilities()).expect("o3 should be a valid model family");
         let config = ToolsConfig::new(&ToolsConfigParams {
             model_family: &model_family,
             approval_policy: AskForApproval::Never,
@@ -1338,7 +1347,8 @@ mod tests {
 
     #[test]
     fn test_mcp_tool_anyof_defaults_to_string() {
-        let model_family = find_family_for_model("o3").expect("o3 should be a valid model family");
+        let model_family =
+            find_family_for_model("o3", built_in_model_capabilities()).expect("o3 should be a valid model family");
         let config = ToolsConfig::new(&ToolsConfigParams {
             model_family: &model_family,
             approval_policy: AskForApproval::Never,
@@ -1403,7 +1413,8 @@ mod tests {
 
     #[test]
     fn test_mcp_tool_additional_properties_schema_defaults_to_true() {
-        let model_family = find_family_for_model("o3").expect("o3 should be a valid model family");
+        let model_family =
+            find_family_for_model("o3", built_in_model_capabilities()).expect("o3 should be a valid model family");
         let config = ToolsConfig::new(&ToolsConfigParams {
             model_family: &model_family,
             approval_policy: AskForApproval::Never,

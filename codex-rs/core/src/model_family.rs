@@ -1,4 +1,19 @@
 use crate::tool_apply_patch::ApplyPatchToolType;
+use once_cell::sync::Lazy;
+use serde::Deserialize;
+use std::collections::HashMap;
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Default, Deserialize)]
+pub struct ModelCapabilities {
+    #[serde(default)]
+    pub needs_special_apply_patch_instructions: bool,
+    #[serde(default)]
+    pub supports_reasoning_summaries: bool,
+    #[serde(default)]
+    pub uses_local_shell_tool: bool,
+    #[serde(default)]
+    pub apply_patch_tool_type: Option<ApplyPatchToolType>,
+}
 
 /// A model family is a group of models that share certain characteristics.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -31,83 +46,116 @@ pub struct ModelFamily {
     pub apply_patch_tool_type: Option<ApplyPatchToolType>,
 }
 
-macro_rules! model_family {
-    (
-        $slug:expr, $family:expr $(, $key:ident : $value:expr )* $(,)?
-    ) => {{
-        // defaults
-        let mut mf = ModelFamily {
-            slug: $slug.to_string(),
-            family: $family.to_string(),
-            needs_special_apply_patch_instructions: false,
-            supports_reasoning_summaries: false,
-            uses_local_shell_tool: false,
-            apply_patch_tool_type: None,
-        };
-        // apply overrides
-        $(
-            mf.$key = $value;
-        )*
-        Some(mf)
-    }};
-}
+static BUILT_IN_MODEL_CAPABILITIES: Lazy<HashMap<String, ModelCapabilities>> =
+    Lazy::new(|| {
+        use ApplyPatchToolType::*;
+        let mut m = HashMap::new();
+        m.insert(
+            "o3".into(),
+            ModelCapabilities {
+                supports_reasoning_summaries: true,
+                ..Default::default()
+            },
+        );
+        m.insert(
+            "o4-mini".into(),
+            ModelCapabilities {
+                supports_reasoning_summaries: true,
+                ..Default::default()
+            },
+        );
+        m.insert(
+            "codex-mini-latest".into(),
+            ModelCapabilities {
+                supports_reasoning_summaries: true,
+                uses_local_shell_tool: true,
+                ..Default::default()
+            },
+        );
+        // Fallback for any slug beginning with "codex-".
+        m.insert(
+            "codex-".into(),
+            ModelCapabilities {
+                supports_reasoning_summaries: true,
+                ..Default::default()
+            },
+        );
+        m.insert(
+            "gpt-4.1".into(),
+            ModelCapabilities {
+                needs_special_apply_patch_instructions: true,
+                ..Default::default()
+            },
+        );
+        m.insert(
+            "gpt-oss".into(),
+            ModelCapabilities {
+                apply_patch_tool_type: Some(Function),
+                ..Default::default()
+            },
+        );
+        m.insert(
+            "gpt-5".into(),
+            ModelCapabilities {
+                supports_reasoning_summaries: true,
+                ..Default::default()
+            },
+        );
+        m
+    });
 
-macro_rules! simple_model_family {
-    (
-        $slug:expr, $family:expr
-    ) => {{
-        Some(ModelFamily {
-            slug: $slug.to_string(),
-            family: $family.to_string(),
-            needs_special_apply_patch_instructions: false,
-            supports_reasoning_summaries: false,
-            uses_local_shell_tool: false,
-            apply_patch_tool_type: None,
-        })
-    }};
+pub fn built_in_model_capabilities() -> &'static HashMap<String, ModelCapabilities> {
+    &BUILT_IN_MODEL_CAPABILITIES
 }
 
 /// Returns a `ModelFamily` for the given model slug, or `None` if the slug
 /// does not match any known model family.
-pub fn find_family_for_model(slug: &str) -> Option<ModelFamily> {
-    if slug.starts_with("o3") {
-        model_family!(
-            slug, "o3",
-            supports_reasoning_summaries: true,
-        )
+pub fn find_family_for_model(
+    slug: &str,
+    model_capabilities: &HashMap<String, ModelCapabilities>,
+) -> Option<ModelFamily> {
+    let family = if slug.starts_with("o3") {
+        "o3"
     } else if slug.starts_with("o4-mini") {
-        model_family!(
-            slug, "o4-mini",
-            supports_reasoning_summaries: true,
-        )
+        "o4-mini"
     } else if slug.starts_with("codex-mini-latest") {
-        model_family!(
-            slug, "codex-mini-latest",
-            supports_reasoning_summaries: true,
-            uses_local_shell_tool: true,
-        )
+        "codex-mini-latest"
     } else if slug.starts_with("codex-") {
-        model_family!(
-            slug, slug,
-            supports_reasoning_summaries: true,
-        )
+        slug
     } else if slug.starts_with("gpt-4.1") {
-        model_family!(
-            slug, "gpt-4.1",
-            needs_special_apply_patch_instructions: true,
-        )
+        "gpt-4.1"
     } else if slug.starts_with("gpt-oss") {
-        model_family!(slug, "gpt-oss", apply_patch_tool_type: Some(ApplyPatchToolType::Function))
+        "gpt-oss"
     } else if slug.starts_with("gpt-4o") {
-        simple_model_family!(slug, "gpt-4o")
+        "gpt-4o"
     } else if slug.starts_with("gpt-3.5") {
-        simple_model_family!(slug, "gpt-3.5")
+        "gpt-3.5"
     } else if slug.starts_with("gpt-5") {
-        model_family!(
-            slug, "gpt-5",
-            supports_reasoning_summaries: true,
-        )
+        "gpt-5"
     } else {
-        None
-    }
+        return None;
+    };
+
+    let caps = model_capabilities
+        .get(slug)
+        .or_else(|| model_capabilities.get(family))
+        .or_else(|| {
+            if slug.starts_with("codex-") {
+                model_capabilities.get("codex-")
+            } else {
+                None
+            }
+        })
+        .cloned()
+        .unwrap_or_default();
+
+    Some(ModelFamily {
+        slug: slug.to_string(),
+        family: family.to_string(),
+        needs_special_apply_patch_instructions: caps.needs_special_apply_patch_instructions,
+        supports_reasoning_summaries: caps.supports_reasoning_summaries,
+        uses_local_shell_tool: caps.uses_local_shell_tool,
+        apply_patch_tool_type: caps.apply_patch_tool_type,
+    })
 }
+

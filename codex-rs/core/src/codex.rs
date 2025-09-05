@@ -65,7 +65,7 @@ use crate::exec_env::create_env;
 use crate::math_tools;
 use crate::mcp_connection_manager::McpConnectionManager;
 use crate::mcp_tool_call::handle_mcp_tool_call;
-use crate::model_family::find_family_for_model;
+use crate::model_family::{built_in_model_capabilities, find_family_for_model};
 use crate::openai_model_info::get_model_info;
 use crate::openai_tools::ApplyPatchToolArgs;
 use crate::openai_tools::ToolsConfig;
@@ -1070,8 +1070,8 @@ async fn submission_loop(
 
                 // Effective model + family
                 let (effective_model, effective_family) = if let Some(m) = model {
-                    let fam =
-                        find_family_for_model(&m).unwrap_or_else(|| config.model_family.clone());
+                    let fam = find_family_for_model(&m, built_in_model_capabilities())
+                        .unwrap_or_else(|| config.model_family.clone());
                     (m, fam)
                 } else {
                     (prev.client.get_model(), prev.client.get_model_family())
@@ -1168,7 +1168,7 @@ async fn submission_loop(
                     let auth_manager = turn_context.client.get_auth_manager();
 
                     // Derive a model family for the requested model; fall back to the session's.
-                    let model_family = find_family_for_model(&model)
+                    let model_family = find_family_for_model(&model, built_in_model_capabilities())
                         .unwrap_or_else(|| config.model_family.clone());
 
                     // Create a per‑turn Config clone with the requested model/family.

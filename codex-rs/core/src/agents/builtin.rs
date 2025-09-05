@@ -9,7 +9,7 @@ use crate::codex::Codex;
 use crate::codex::CodexSpawnOk;
 use crate::config::Config;
 use crate::config::find_codex_home;
-use crate::model_family::find_family_for_model;
+use crate::model_family::{built_in_model_capabilities, find_family_for_model};
 use crate::protocol::EventMsg;
 use crate::protocol::InputItem;
 use crate::protocol::Op;
@@ -68,7 +68,7 @@ pub mod coding {
         if let Some(role_name) = role {
             if let Some(role) = base.model_roles.get(role_name) {
                 cfg.model = role.model.clone();
-                cfg.model_family = find_family_for_model(&cfg.model)
+                cfg.model_family = find_family_for_model(&cfg.model, built_in_model_capabilities())
                     .unwrap_or_else(|| base.model_family.clone());
                 if let Some(provider_id) = &role.provider {
                     cfg.model_provider_id = provider_id.clone();
@@ -262,8 +262,9 @@ pub mod rag {
         if let Some(role_name) = answer_model_role {
             if let Some(role) = ctx.config.model_roles.get(role_name) {
                 nested_cfg.model = role.model.clone();
-                nested_cfg.model_family = crate::model_family::find_family_for_model(&nested_cfg.model)
-                    .unwrap_or_else(|| ctx.config.model_family.clone());
+                nested_cfg.model_family =
+                    find_family_for_model(&nested_cfg.model, built_in_model_capabilities())
+                        .unwrap_or_else(|| ctx.config.model_family.clone());
                 if let Some(provider_id) = &role.provider {
                     nested_cfg.model_provider_id = provider_id.clone();
                     if let Some(info) = ctx.config.model_providers.get(provider_id) {

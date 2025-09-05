@@ -3,7 +3,7 @@
 use codex_core::ConversationManager;
 use codex_core::ModelProviderInfo;
 use codex_core::built_in_model_providers;
-use codex_core::model_family::find_family_for_model;
+use codex_core::model_family::{built_in_model_capabilities, find_family_for_model};
 use codex_core::protocol::AskForApproval;
 use codex_core::protocol::EventMsg;
 use codex_core::protocol::InputItem;
@@ -75,7 +75,8 @@ async fn codex_mini_latest_tools() {
         ConversationManager::with_auth(CodexAuth::from_api_key("Test API Key"));
     config.include_apply_patch_tool = false;
     config.model = "codex-mini-latest".to_string();
-    config.model_family = find_family_for_model("codex-mini-latest").unwrap();
+    config.model_family =
+        find_family_for_model("codex-mini-latest", built_in_model_capabilities()).unwrap();
 
     let codex = conversation_manager
         .new_conversation(config)

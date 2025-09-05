@@ -12,8 +12,10 @@ use crate::config_types::Tui;
 use crate::config_types::UriBasedFileOpener;
 use crate::config_types::Verbosity;
 use crate::git_info::resolve_root_git_project_for_trust;
-use crate::model_family::ModelFamily;
-use crate::model_family::find_family_for_model;
+use crate::model_family::{
+    built_in_model_capabilities, find_family_for_model, ModelCapabilities, ModelFamily,
+};
+use crate::tool_apply_patch::ApplyPatchToolType;
 use crate::model_provider_info::ModelProviderInfo;
 use crate::model_provider_info::built_in_model_providers;
 use crate::openai_model_info::get_model_info;
@@ -516,6 +518,16 @@ pub struct ConfigToml {
 
     /// Override to force-enable reasoning summaries for the configured model.
     pub model_supports_reasoning_summaries: Option<bool>,
+    /// Top-level flag to require special apply_patch instructions for the configured model.
+    pub model_needs_special_apply_patch_instructions: Option<bool>,
+    /// Top-level flag to include the implicit local_shell tool for the configured model.
+    pub model_uses_local_shell_tool: Option<bool>,
+    /// Preferred apply_patch tool call style for the configured model.
+    pub model_apply_patch_tool_type: Option<ApplyPatchToolType>,
+
+    /// User-defined capabilities per model slug.
+    #[serde(default)]
+    pub model_capabilities: HashMap<String, ModelCapabilities>,
 
     /// Base URL for requests to ChatGPT (as opposed to the OpenAI API).
     pub chatgpt_base_url: Option<String>,
@@ -808,18 +820,49 @@ impl Config {
             .or(config_profile.model)
             .or(cfg.model)
             .unwrap_or_else(default_model);
-        let model_family = find_family_for_model(&model).unwrap_or_else(|| {
-            let supports_reasoning_summaries =
-                cfg.model_supports_reasoning_summaries.unwrap_or(false);
-            ModelFamily {
-                slug: model.clone(),
-                family: model.clone(),
-                needs_special_apply_patch_instructions: false,
-                supports_reasoning_summaries,
-                uses_local_shell_tool: false,
-                apply_patch_tool_type: None,
+
+        // Merge user-defined model capabilities with built-ins.
+        let mut model_capabilities = built_in_model_capabilities().clone();
+        for (slug, caps) in cfg.model_capabilities.into_iter() {
+            model_capabilities.insert(slug, caps);
+        }
+
+        if cfg.model_supports_reasoning_summaries.is_some()
+            || cfg.model_needs_special_apply_patch_instructions.is_some()
+            || cfg.model_uses_local_shell_tool.is_some()
+            || cfg.model_apply_patch_tool_type.is_some()
+        {
+            let caps = model_capabilities.entry(model.clone()).or_default();
+            if let Some(v) = cfg.model_supports_reasoning_summaries {
+                caps.supports_reasoning_summaries = v;
             }
-        });
+            if let Some(v) = cfg.model_needs_special_apply_patch_instructions {
+                caps.needs_special_apply_patch_instructions = v;
+            }
+            if let Some(v) = cfg.model_uses_local_shell_tool {
+                caps.uses_local_shell_tool = v;
+            }
+            if let Some(v) = cfg.model_apply_patch_tool_type {
+                caps.apply_patch_tool_type = Some(v);
+            }
+        }
+
+        let model_family =
+            find_family_for_model(&model, &model_capabilities).unwrap_or_else(|| {
+                let caps = model_capabilities
+                    .get(&model)
+                    .cloned()
+                    .unwrap_or_default();
+                ModelFamily {
+                    slug: model.clone(),
+                    family: model.clone(),
+                    needs_special_apply_patch_instructions:
+                        caps.needs_special_apply_patch_instructions,
+                    supports_reasoning_summaries: caps.supports_reasoning_summaries,
+                    uses_local_shell_tool: caps.uses_local_shell_tool,
+                    apply_patch_tool_type: caps.apply_patch_tool_type,
+                }
+            });
 
         let openai_model_info = get_model_info(&model_family);
         let model_context_window = cfg
@@ -1327,7 +1370,8 @@ disable_response_storage = true
         assert_eq!(
             Config {
                 model: "o3".to_string(),
-                model_family: find_family_for_model("o3").expect("known model slug"),
+                model_family: find_family_for_model("o3", built_in_model_capabilities())
+                    .expect("known model slug"),
                 model_context_window: Some(200_000),
                 model_max_output_tokens: Some(100_000),
                 model_provider_id: "openai".to_string(),
@@ -1388,7 +1432,11 @@ disable_response_storage = true
         )?;
         let expected_gpt3_profile_config = Config {
             model: "gpt-3.5-turbo".to_string(),
-            model_family: find_family_for_model("gpt-3.5-turbo").expect("known model slug"),
+            model_family: find_family_for_model(
+                "gpt-3.5-turbo",
+                built_in_model_capabilities(),
+            )
+            .expect("known model slug"),
             model_context_window: Some(16_385),
             model_max_output_tokens: Some(4_096),
             model_provider_id: "openai-chat-completions".to_string(),
@@ -1464,7 +1512,8 @@ disable_response_storage = true
         )?;
         let expected_zdr_profile_config = Config {
             model: "o3".to_string(),
-            model_family: find_family_for_model("o3").expect("known model slug"),
+            model_family: find_family_for_model("o3", built_in_model_capabilities())
+                .expect("known model slug"),
             model_context_window: Some(200_000),
             model_max_output_tokens: Some(100_000),
             model_provider_id: "openai".to_string(),

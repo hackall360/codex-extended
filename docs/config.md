@@ -378,6 +378,40 @@ By default, `reasoning` is only set on requests to OpenAI models that are known 
 model_supports_reasoning_summaries = true
 ```
 
+## model_needs_special_apply_patch_instructions
+
+Force the inclusion of extra instructions describing the virtual `apply_patch` CLI for the configured model.
+
+```toml
+model_needs_special_apply_patch_instructions = true
+```
+
+## model_uses_local_shell_tool
+
+When set, the implicit `local_shell` tool is always available to the configured model.
+
+```toml
+model_uses_local_shell_tool = true
+```
+
+## model_apply_patch_tool_type
+
+Specify the preferred `apply_patch` tool call style for the configured model. Valid values are `"function"` and `"freeform"`.
+
+```toml
+model_apply_patch_tool_type = "function"
+```
+
+## model_capabilities
+
+Define capabilities for additional model slugs. These settings override built-in defaults.
+
+```toml
+[model_capabilities."gpt-4.1"]
+needs_special_apply_patch_instructions = true
+supports_reasoning_summaries = true
+```
+
 ## sandbox_mode
 
 Codex executes model-generated shell commands inside an OS-level sandbox.
@@ -747,6 +781,13 @@ auto_compact_tolerance_percent = 8
 | `projects.<path>.trust_level`                    | string             | Mark project/worktree as trusted (only `"trusted"` is recognized).                         |
 | `preferred_auth_method`                          | `chatgpt`          | `apikey`                                                                                   | Select default auth method (default: `chatgpt`). |
 | `tools.web_search`                               | boolean            | Enable web search tool (alias: `web_search_request`) (default: false).                     |
+| `model_needs_special_apply_patch_instructions`   | boolean            | Include extra `apply_patch` instructions.                     |
+| `model_uses_local_shell_tool`                    | boolean            | Expose implicit `local_shell` tool.                     |
+| `model_apply_patch_tool_type`                    | `function`/`freeform` | Preferred `apply_patch` tool call style.                     |
+| `model_capabilities.<slug>.needs_special_apply_patch_instructions` | boolean | Per-model `apply_patch` instructions.                     |
+| `model_capabilities.<slug>.supports_reasoning_summaries` | boolean | Per-model reasoning summaries toggle.                     |
+| `model_capabilities.<slug>.uses_local_shell_tool` | boolean | Per-model implicit `local_shell` tool.                     |
+| `model_capabilities.<slug>.apply_patch_tool_type` | `function`/`freeform` | Per-model `apply_patch` tool style.                     |
 
 ## model_roles
 

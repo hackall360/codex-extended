@@ -5,8 +5,7 @@ mod url;
 
 pub use client::OllamaClient;
 use codex_core::config::Config;
-use codex_core::model_family::ModelFamily;
-use codex_core::model_family::find_family_for_model;
+use codex_core::model_family::{built_in_model_capabilities, find_family_for_model, ModelFamily};
 pub use pull::CliProgressReporter;
 pub use pull::PullEvent;
 pub use pull::PullProgressReporter;
@@ -36,7 +35,8 @@ pub async fn ensure_oss_ready(config: &mut Config) -> std::io::Result<()> {
             {
                 tracing::info!("Using local Ollama model `{}`", first);
                 config.model = first.clone();
-                config.model_family = find_family_for_model(first).unwrap_or_else(|| ModelFamily {
+                config.model_family = find_family_for_model(first, built_in_model_capabilities())
+                    .unwrap_or_else(|| ModelFamily {
                     slug: first.clone(),
                     family: first.clone(),
                     needs_special_apply_patch_instructions: false,
