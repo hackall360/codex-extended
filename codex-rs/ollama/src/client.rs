@@ -13,7 +13,8 @@ use crate::url::is_openai_compatible_base_url;
 use codex_core::BUILT_IN_OSS_MODEL_PROVIDER_ID;
 use codex_core::ModelProviderInfo;
 use codex_core::WireApi;
-use codex_core::config::Config;
+use codex_core::config::{Config, ModelMetadata, ModelMetadataProvider};
+use async_trait::async_trait;
 
 const OLLAMA_CONNECTION_ERROR: &str = "No running Ollama server detected. Start it with: `ollama serve` (after installing). Install instructions: https://github.com/ollama/ollama?tab=readme-ov-file#ollama";
 
@@ -96,6 +97,33 @@ impl OllamaClient {
             );
             Err(io::Error::other(OLLAMA_CONNECTION_ERROR))
         }
+    }
+
+    /// Fetch metadata for a given model from the Ollama server.
+    pub async fn fetch_model_metadata(
+        &self,
+        model: &str,
+    ) -> io::Result<Option<ModelMetadata>> {
+        let url = format!(
+            "{}/api/show/{}",
+            self.host_root.trim_end_matches('/'),
+            model
+        );
+        let resp = self.client.get(url).send().await.map_err(io::Error::other)?;
+        if !resp.status().is_success() {
+            return Ok(None);
+        }
+        let val = resp.json::<JsonValue>().await.map_err(io::Error::other)?;
+        let ctx = val
+            .get("details")
+            .and_then(|d| d.get("parameters"))
+            .and_then(|p| p.get("num_ctx"))
+            .and_then(|n| n.as_u64());
+        let max = val.get("num_predict").and_then(|n| n.as_u64());
+        Ok(Some(ModelMetadata {
+            context_window: ctx,
+            max_output_tokens: max,
+        }))
     }
 
     /// Return the list of model names known to the local Ollama instance.
@@ -229,6 +257,16 @@ impl OllamaClient {
             host_root: host_root.into(),
             uses_openai_compat: false,
         }
+    }
+}
+
+#[async_trait]
+impl ModelMetadataProvider for OllamaClient {
+    async fn fetch_model_metadata(
+        &self,
+        model: &str,
+    ) -> io::Result<Option<ModelMetadata>> {
+        OllamaClient::fetch_model_metadata(self, model).await
     }
 }
 

@@ -19,6 +19,7 @@ use crate::tool_apply_patch::ApplyPatchToolType;
 use crate::model_provider_info::ModelProviderInfo;
 use crate::model_provider_info::built_in_model_providers;
 use crate::openai_model_info::get_model_info;
+use async_trait::async_trait;
 use crate::protocol::AskForApproval;
 use crate::protocol::SandboxPolicy;
 use codex_login::AuthMode;
@@ -44,6 +45,22 @@ pub(crate) const PROJECT_DOC_MAX_BYTES: usize = 32 * 1024; // 32 KiB
 const CONFIG_TOML_FILE: &str = "config.toml";
 
 const DEFAULT_RESPONSES_ORIGINATOR_HEADER: &str = "codex_cli_rs";
+
+/// Metadata describing a model's context window and output limits.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ModelMetadata {
+    pub context_window: Option<u64>,
+    pub max_output_tokens: Option<u64>,
+}
+
+/// A trait for fetching model metadata such as context window sizes.
+#[async_trait]
+pub trait ModelMetadataProvider {
+    async fn fetch_model_metadata(
+        &self,
+        model: &str,
+    ) -> std::io::Result<Option<ModelMetadata>>;
+}
 
 /// Application configuration loaded from disk and merged with overrides.
 #[derive(Debug, Clone, PartialEq)]

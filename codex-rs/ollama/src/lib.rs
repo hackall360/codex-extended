@@ -26,34 +26,43 @@ pub async fn ensure_oss_ready(config: &mut Config) -> std::io::Result<()> {
 
     match ollama_client.fetch_models().await {
         Ok(models) => {
-            if models.iter().any(|m| m == &requested_model) {
-                return Ok(());
+            if !models.iter().any(|m| m == &requested_model) {
+                if requested_model == DEFAULT_OSS_MODEL
+                    && let Some(first) = models.first()
+                {
+                    tracing::info!("Using local Ollama model `{}`", first);
+                    config.model = first.clone();
+                    config.model_family =
+                        find_family_for_model(first, built_in_model_capabilities())
+                            .unwrap_or_else(|| ModelFamily {
+                                slug: first.clone(),
+                                family: first.clone(),
+                                needs_special_apply_patch_instructions: false,
+                                supports_reasoning_summaries: false,
+                                uses_local_shell_tool: false,
+                                apply_patch_tool_type: None,
+                            });
+                } else {
+                    let mut reporter = crate::CliProgressReporter::new();
+                    ollama_client
+                        .pull_with_reporter(&requested_model, &mut reporter)
+                        .await?;
+                }
             }
-
-            if requested_model == DEFAULT_OSS_MODEL
-                && let Some(first) = models.first()
-            {
-                tracing::info!("Using local Ollama model `{}`", first);
-                config.model = first.clone();
-                config.model_family = find_family_for_model(first, built_in_model_capabilities())
-                    .unwrap_or_else(|| ModelFamily {
-                    slug: first.clone(),
-                    family: first.clone(),
-                    needs_special_apply_patch_instructions: false,
-                    supports_reasoning_summaries: false,
-                    uses_local_shell_tool: false,
-                    apply_patch_tool_type: None,
-                });
-                return Ok(());
-            }
-
-            let mut reporter = crate::CliProgressReporter::new();
-            ollama_client
-                .pull_with_reporter(&requested_model, &mut reporter)
-                .await?;
         }
         Err(err) => {
             tracing::warn!("Failed to query local models from Ollama: {}.", err);
+        }
+    }
+
+    if config.model_context_window.is_none() || config.model_max_output_tokens.is_none() {
+        if let Ok(Some(meta)) = ollama_client.fetch_model_metadata(&config.model).await {
+            if config.model_context_window.is_none() {
+                config.model_context_window = meta.context_window;
+            }
+            if config.model_max_output_tokens.is_none() {
+                config.model_max_output_tokens = meta.max_output_tokens;
+            }
         }
     }
 

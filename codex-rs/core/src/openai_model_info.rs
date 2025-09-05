@@ -1,4 +1,8 @@
-use crate::model_family::ModelFamily;
+use crate::config::{ModelMetadata, ModelMetadataProvider};
+use crate::model_family::{
+    built_in_model_capabilities, find_family_for_model, ModelFamily,
+};
+use async_trait::async_trait;
 
 /// Metadata about a model, particularly OpenAI models.
 /// We may want to consider including details like the pricing for
@@ -89,5 +93,30 @@ pub(crate) fn get_model_info(model_family: &ModelFamily) -> Option<ModelInfo> {
         }),
 
         _ => None,
+    }
+}
+
+pub struct OpenAiMetadataProvider;
+
+#[async_trait]
+impl ModelMetadataProvider for OpenAiMetadataProvider {
+    async fn fetch_model_metadata(
+        &self,
+        model: &str,
+    ) -> std::io::Result<Option<ModelMetadata>> {
+        let caps = built_in_model_capabilities();
+        let family = find_family_for_model(model, &caps).unwrap_or_else(|| ModelFamily {
+            slug: model.to_string(),
+            family: model.to_string(),
+            needs_special_apply_patch_instructions: false,
+            supports_reasoning_summaries: false,
+            uses_local_shell_tool: false,
+            apply_patch_tool_type: None,
+        });
+        let info = get_model_info(&family);
+        Ok(info.map(|i| ModelMetadata {
+            context_window: Some(i.context_window),
+            max_output_tokens: Some(i.max_output_tokens),
+        }))
     }
 }
