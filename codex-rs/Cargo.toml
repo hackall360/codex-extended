@@ -21,6 +21,7 @@ members = [
     "server",
     "client",
     "tui",
+    "mul",
 ]
 resolver = "2"
 

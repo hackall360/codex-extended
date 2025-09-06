@@ -1171,10 +1171,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "codex-mul"
+version = "0.0.0"
+dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "codex-ollama"
 version = "0.0.0"
 dependencies = [
  "async-stream",
+ "async-trait",
  "bytes",
  "codex-core",
  "futures",
