@@ -22,6 +22,7 @@ offline-voice = [
     "rubato",
     "hound",
 ]
+mul = ["codex-mul"]
 
 [dependencies]
 anyhow = "1"
@@ -34,6 +35,7 @@ codex-login = { path = "../login" }
 codex-mcp-client = { path = "../mcp-client" }
 codex-protocol = { path = "../protocol" }
 codex-file-search = { path = "../file-search" }
+codex-mul = { path = "../mul", optional = true }
 dirs = "6"
 env-flags = "0.1.1"
 eventsource-stream = "0.2.3"
