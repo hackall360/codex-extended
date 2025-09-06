@@ -1,44 +1,33 @@
 use super::ToolAdapter;
 use crate::error::Result;
 
-/// No-op implementation of [`ToolAdapter`].
-pub struct DefaultToolAdapter;
+pub struct Adapter;
 
-impl ToolAdapter for DefaultToolAdapter {
+impl ToolAdapter for Adapter {
     fn build() -> Result<Vec<&'static str>> {
-        Ok(vec![])
+        Ok(vec!["sbt", "compile"])
     }
-
     fn test() -> Result<Vec<&'static str>> {
-        Ok(vec![])
+        Ok(vec!["sbt", "test"])
     }
-
     fn lint() -> Result<Vec<&'static str>> {
-        Ok(vec![])
+        Ok(vec!["scalafmt"])
     }
-
     fn run() -> Result<Vec<&'static str>> {
-        Ok(vec![])
+        Ok(vec!["sbt", "run"])
     }
 }
 
-impl DefaultToolAdapter {
-    /// Convenience wrapper around [`ToolAdapter::build`].
+impl Adapter {
     pub fn build() -> Result<Vec<&'static str>> {
         <Self as ToolAdapter>::build()
     }
-
-    /// Convenience wrapper around [`ToolAdapter::test`].
     pub fn test() -> Result<Vec<&'static str>> {
         <Self as ToolAdapter>::test()
     }
-
-    /// Convenience wrapper around [`ToolAdapter::lint`].
     pub fn lint() -> Result<Vec<&'static str>> {
         <Self as ToolAdapter>::lint()
     }
-
-    /// Convenience wrapper around [`ToolAdapter::run`].
     pub fn run() -> Result<Vec<&'static str>> {
         <Self as ToolAdapter>::run()
     }
