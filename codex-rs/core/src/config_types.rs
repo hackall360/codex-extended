@@ -37,6 +37,14 @@ pub struct AgentConfigEntry {
 }
 
 #[derive(Deserialize, Debug, Copy, Clone, PartialEq)]
+#[serde(rename_all = "snake_case")]
+pub enum ApplyPatchToolConfig {
+    Freeform,
+    Function,
+    None,
+}
+
+#[derive(Deserialize, Debug, Copy, Clone, PartialEq)]
 pub enum UriBasedFileOpener {
     #[serde(rename = "vscode")]
     VsCode,

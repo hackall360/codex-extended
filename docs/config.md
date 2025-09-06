@@ -1,3 +1,4 @@
+
 # Config
 
 Codex supports several mechanisms for setting config values:
@@ -394,12 +395,12 @@ When set, the implicit `local_shell` tool is always available to the configured 
 model_uses_local_shell_tool = true
 ```
 
-## model_apply_patch_tool_type
+## model_apply_patch_tool
 
-Specify the preferred `apply_patch` tool call style for the configured model. Valid values are `"function"` and `"freeform"`.
+Specify the preferred `apply_patch` tool call style for the configured model. Valid values are `"freeform"`, `"function"`, and `"none"`.
 
 ```toml
-model_apply_patch_tool_type = "function"
+model_apply_patch_tool = "function"
 ```
 
 ## model_capabilities
@@ -783,7 +784,7 @@ auto_compact_tolerance_percent = 8
 | `tools.web_search`                               | boolean            | Enable web search tool (alias: `web_search_request`) (default: false).                     |
 | `model_needs_special_apply_patch_instructions`   | boolean            | Include extra `apply_patch` instructions.                     |
 | `model_uses_local_shell_tool`                    | boolean            | Expose implicit `local_shell` tool.                     |
-| `model_apply_patch_tool_type`                    | `function`/`freeform` | Preferred `apply_patch` tool call style.                     |
+| `model_apply_patch_tool`                         | `function`/`freeform`/`none` | Preferred `apply_patch` tool call style.          |
 | `model_capabilities.<slug>.needs_special_apply_patch_instructions` | boolean | Per-model `apply_patch` instructions.                     |
 | `model_capabilities.<slug>.supports_reasoning_summaries` | boolean | Per-model reasoning summaries toggle.                     |
 | `model_capabilities.<slug>.uses_local_shell_tool` | boolean | Per-model implicit `local_shell` tool.                     |

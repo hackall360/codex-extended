@@ -1,18 +1,19 @@
+use serde::ser::Error as _;
 use serde::Deserialize;
 use serde::Serialize;
-use serde::ser::Error as _;
-use serde_json::Value as JsonValue;
 use serde_json::json;
+use serde_json::Value as JsonValue;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 
+use crate::config_types::ApplyPatchToolConfig;
 use crate::model_family::ModelFamily;
 use crate::plan_tool::PLAN_TOOL;
 use crate::protocol::AskForApproval;
 use crate::protocol::SandboxPolicy;
-use crate::tool_apply_patch::ApplyPatchToolType;
 use crate::tool_apply_patch::create_apply_patch_freeform_tool;
 use crate::tool_apply_patch::create_apply_patch_json_tool;
+use crate::tool_apply_patch::ApplyPatchToolType;
 
 #[derive(Debug, Clone, Serialize, PartialEq)]
 pub struct ResponsesApiTool {
@@ -126,6 +127,7 @@ pub(crate) struct ToolsConfigParams<'a> {
     pub(crate) sandbox_policy: SandboxPolicy,
     pub(crate) include_plan_tool: bool,
     pub(crate) include_apply_patch_tool: bool,
+    pub(crate) model_apply_patch_tool: Option<ApplyPatchToolConfig>,
     pub(crate) include_web_search_request: bool,
     pub(crate) use_streamable_shell_tool: bool,
     pub(crate) include_view_image_tool: bool,
@@ -139,6 +141,7 @@ impl ToolsConfig {
             sandbox_policy,
             include_plan_tool,
             include_apply_patch_tool,
+            model_apply_patch_tool,
             include_web_search_request,
             use_streamable_shell_tool,
             include_view_image_tool,
@@ -156,14 +159,22 @@ impl ToolsConfig {
             }
         }
 
-        let apply_patch_tool_type = match model_family.apply_patch_tool_type {
-            Some(ApplyPatchToolType::Freeform) => Some(ApplyPatchToolType::Freeform),
-            Some(ApplyPatchToolType::Function) => Some(ApplyPatchToolType::Function),
-            None => {
-                if *include_apply_patch_tool {
-                    Some(ApplyPatchToolType::Freeform)
-                } else {
-                    None
+        let apply_patch_tool_type = if let Some(user_type) = model_apply_patch_tool {
+            match user_type {
+                ApplyPatchToolConfig::Freeform => Some(ApplyPatchToolType::Freeform),
+                ApplyPatchToolConfig::Function => Some(ApplyPatchToolType::Function),
+                ApplyPatchToolConfig::None => None,
+            }
+        } else {
+            match model_family.apply_patch_tool_type {
+                Some(ApplyPatchToolType::Freeform) => Some(ApplyPatchToolType::Freeform),
+                Some(ApplyPatchToolType::Function) => Some(ApplyPatchToolType::Function),
+                None => {
+                    if *include_apply_patch_tool {
+                        Some(ApplyPatchToolType::Freeform)
+                    } else {
+                        None
+                    }
                 }
             }
         };
@@ -742,17 +753,27 @@ fn create_invoke_coding_agent_tool() -> ResponsesApiTool {
     let mut properties = BTreeMap::new();
     properties.insert(
         "task".to_string(),
-        JsonSchema::String { description: Some("Coding task or goal to accomplish".to_string()) },
+        JsonSchema::String {
+            description: Some("Coding task or goal to accomplish".to_string()),
+        },
     );
     properties.insert(
         "model_role".to_string(),
-        JsonSchema::String { description: Some("Optional model role to use for the coding agent".to_string()) },
+        JsonSchema::String {
+            description: Some("Optional model role to use for the coding agent".to_string()),
+        },
     );
     ResponsesApiTool {
         name: "invoke_coding_agent".to_string(),
-        description: "Invoke a subordinate coding agent that can execute and apply patches autonomously".to_string(),
+        description:
+            "Invoke a subordinate coding agent that can execute and apply patches autonomously"
+                .to_string(),
         strict: false,
-        parameters: JsonSchema::Object { properties, required: Some(vec!["task".to_string()]), additional_properties: Some(false) },
+        parameters: JsonSchema::Object {
+            properties,
+            required: Some(vec!["task".to_string()]),
+            additional_properties: Some(false),
+        },
     }
 }
 
@@ -760,21 +781,31 @@ fn create_invoke_file_search_agent_tool() -> ResponsesApiTool {
     let mut properties = BTreeMap::new();
     properties.insert(
         "query".to_string(),
-        JsonSchema::String { description: Some("Fuzzy search query across project files".to_string()) },
+        JsonSchema::String {
+            description: Some("Fuzzy search query across project files".to_string()),
+        },
     );
     properties.insert(
         "limit".to_string(),
-        JsonSchema::Number { description: Some("Max results to return (default 50)".to_string()) },
+        JsonSchema::Number {
+            description: Some("Max results to return (default 50)".to_string()),
+        },
     );
     properties.insert(
         "level".to_string(),
-        JsonSchema::String { description: Some("Local search level: small|medium|codebase|extra|full".to_string()) },
+        JsonSchema::String {
+            description: Some("Local search level: small|medium|codebase|extra|full".to_string()),
+        },
     );
     ResponsesApiTool {
         name: "invoke_file_search_agent".to_string(),
         description: "Search files in the current workspace and return ranked matches".to_string(),
         strict: false,
-        parameters: JsonSchema::Object { properties, required: Some(vec!["query".to_string()]), additional_properties: Some(false) },
+        parameters: JsonSchema::Object {
+            properties,
+            required: Some(vec!["query".to_string()]),
+            additional_properties: Some(false),
+        },
     }
 }
 
@@ -782,21 +813,31 @@ fn create_invoke_web_search_agent_tool() -> ResponsesApiTool {
     let mut properties = BTreeMap::new();
     properties.insert(
         "query".to_string(),
-        JsonSchema::String { description: Some("Web search query".to_string()) },
+        JsonSchema::String {
+            description: Some("Web search query".to_string()),
+        },
     );
     properties.insert(
         "top_k".to_string(),
-        JsonSchema::Number { description: Some("Max results to return (default 5)".to_string()) },
+        JsonSchema::Number {
+            description: Some("Max results to return (default 5)".to_string()),
+        },
     );
     properties.insert(
         "mode".to_string(),
-        JsonSchema::String { description: Some("normal|deep|research".to_string()) },
+        JsonSchema::String {
+            description: Some("normal|deep|research".to_string()),
+        },
     );
     ResponsesApiTool {
         name: "invoke_web_search_agent".to_string(),
         description: "Search the web via configured provider and return summary".to_string(),
         strict: false,
-        parameters: JsonSchema::Object { properties, required: Some(vec!["query".to_string()]), additional_properties: Some(false) },
+        parameters: JsonSchema::Object {
+            properties,
+            required: Some(vec!["query".to_string()]),
+            additional_properties: Some(false),
+        },
     }
 }
 
@@ -804,33 +845,51 @@ fn create_invoke_rag_agent_tool() -> ResponsesApiTool {
     let mut properties = BTreeMap::new();
     properties.insert(
         "question".to_string(),
-        JsonSchema::String { description: Some("Question to answer using retrieval".to_string()) },
+        JsonSchema::String {
+            description: Some("Question to answer using retrieval".to_string()),
+        },
     );
     properties.insert(
         "top_k".to_string(),
-        JsonSchema::Number { description: Some("Top-K contexts to retrieve".to_string()) },
+        JsonSchema::Number {
+            description: Some("Top-K contexts to retrieve".to_string()),
+        },
     );
     properties.insert(
         "level".to_string(),
-        JsonSchema::String { description: Some("Local search level: small|medium|codebase|extra|full".to_string()) },
+        JsonSchema::String {
+            description: Some("Local search level: small|medium|codebase|extra|full".to_string()),
+        },
     );
     properties.insert(
         "include_web".to_string(),
-        JsonSchema::Boolean { description: Some("Include web results in retrieval".to_string()) },
+        JsonSchema::Boolean {
+            description: Some("Include web results in retrieval".to_string()),
+        },
     );
     properties.insert(
         "include_local".to_string(),
-        JsonSchema::Boolean { description: Some("Include local files in retrieval".to_string()) },
+        JsonSchema::Boolean {
+            description: Some("Include local files in retrieval".to_string()),
+        },
     );
     properties.insert(
         "answer_model_role".to_string(),
-        JsonSchema::String { description: Some("Optional model_role to use for the answer synthesis step".to_string()) },
+        JsonSchema::String {
+            description: Some(
+                "Optional model_role to use for the answer synthesis step".to_string(),
+            ),
+        },
     );
     ResponsesApiTool {
         name: "invoke_rag_agent".to_string(),
         description: "Answer questions using retrieval-augmented generation".to_string(),
         strict: false,
-        parameters: JsonSchema::Object { properties, required: Some(vec!["question".to_string()]), additional_properties: Some(false) },
+        parameters: JsonSchema::Object {
+            properties,
+            required: Some(vec!["question".to_string()]),
+            additional_properties: Some(false),
+        },
     }
 }
 
@@ -839,17 +898,29 @@ fn create_invoke_dag_agent_tool() -> ResponsesApiTool {
     // Free-form nodes/edges; allow additional properties.
     properties.insert(
         "nodes".to_string(),
-        JsonSchema::Object { properties: BTreeMap::new(), required: None, additional_properties: Some(true) },
+        JsonSchema::Object {
+            properties: BTreeMap::new(),
+            required: None,
+            additional_properties: Some(true),
+        },
     );
     properties.insert(
         "edges".to_string(),
-        JsonSchema::Object { properties: BTreeMap::new(), required: None, additional_properties: Some(true) },
+        JsonSchema::Object {
+            properties: BTreeMap::new(),
+            required: None,
+            additional_properties: Some(true),
+        },
     );
     ResponsesApiTool {
         name: "invoke_dag_agent".to_string(),
         description: "Execute a DAG of agent tasks; nodes and edges specify flow".to_string(),
         strict: false,
-        parameters: JsonSchema::Object { properties, required: Some(vec!["nodes".to_string(), "edges".to_string()]), additional_properties: Some(true) },
+        parameters: JsonSchema::Object {
+            properties,
+            required: Some(vec!["nodes".to_string(), "edges".to_string()]),
+            additional_properties: Some(true),
+        },
     }
 }
 
@@ -888,17 +959,16 @@ mod tests {
 
     #[test]
     fn test_get_openai_tools() {
-        let model_family = find_family_for_model(
-            "codex-mini-latest",
-            built_in_model_capabilities(),
-        )
-        .expect("codex-mini-latest should be a valid model family");
+        let model_family =
+            find_family_for_model("codex-mini-latest", built_in_model_capabilities())
+                .expect("codex-mini-latest should be a valid model family");
         let config = ToolsConfig::new(&ToolsConfigParams {
             model_family: &model_family,
             approval_policy: AskForApproval::Never,
             sandbox_policy: SandboxPolicy::ReadOnly,
             include_plan_tool: true,
             include_apply_patch_tool: false,
+            model_apply_patch_tool: None,
             include_web_search_request: true,
             use_streamable_shell_tool: false,
             include_view_image_tool: true,
@@ -921,14 +991,15 @@ mod tests {
 
     #[test]
     fn test_get_openai_tools_default_shell() {
-        let model_family =
-            find_family_for_model("o3", built_in_model_capabilities()).expect("o3 should be a valid model family");
+        let model_family = find_family_for_model("o3", built_in_model_capabilities())
+            .expect("o3 should be a valid model family");
         let config = ToolsConfig::new(&ToolsConfigParams {
             model_family: &model_family,
             approval_policy: AskForApproval::Never,
             sandbox_policy: SandboxPolicy::ReadOnly,
             include_plan_tool: true,
             include_apply_patch_tool: false,
+            model_apply_patch_tool: None,
             include_web_search_request: true,
             use_streamable_shell_tool: false,
             include_view_image_tool: true,
@@ -951,14 +1022,15 @@ mod tests {
 
     #[test]
     fn test_get_openai_tools_mcp_tools() {
-        let model_family =
-            find_family_for_model("o3", built_in_model_capabilities()).expect("o3 should be a valid model family");
+        let model_family = find_family_for_model("o3", built_in_model_capabilities())
+            .expect("o3 should be a valid model family");
         let config = ToolsConfig::new(&ToolsConfigParams {
             model_family: &model_family,
             approval_policy: AskForApproval::Never,
             sandbox_policy: SandboxPolicy::ReadOnly,
             include_plan_tool: false,
             include_apply_patch_tool: false,
+            model_apply_patch_tool: None,
             include_web_search_request: true,
             use_streamable_shell_tool: false,
             include_view_image_tool: true,
@@ -1060,14 +1132,15 @@ mod tests {
 
     #[test]
     fn test_get_openai_tools_mcp_tools_sorted_by_name() {
-        let model_family =
-            find_family_for_model("o3", built_in_model_capabilities()).expect("o3 should be a valid model family");
+        let model_family = find_family_for_model("o3", built_in_model_capabilities())
+            .expect("o3 should be a valid model family");
         let config = ToolsConfig::new(&ToolsConfigParams {
             model_family: &model_family,
             approval_policy: AskForApproval::Never,
             sandbox_policy: SandboxPolicy::ReadOnly,
             include_plan_tool: false,
             include_apply_patch_tool: false,
+            model_apply_patch_tool: None,
             include_web_search_request: false,
             use_streamable_shell_tool: false,
             include_view_image_tool: true,
@@ -1141,14 +1214,15 @@ mod tests {
 
     #[test]
     fn test_mcp_tool_property_missing_type_defaults_to_string() {
-        let model_family =
-            find_family_for_model("o3", built_in_model_capabilities()).expect("o3 should be a valid model family");
+        let model_family = find_family_for_model("o3", built_in_model_capabilities())
+            .expect("o3 should be a valid model family");
         let config = ToolsConfig::new(&ToolsConfigParams {
             model_family: &model_family,
             approval_policy: AskForApproval::Never,
             sandbox_policy: SandboxPolicy::ReadOnly,
             include_plan_tool: false,
             include_apply_patch_tool: false,
+            model_apply_patch_tool: None,
             include_web_search_request: true,
             use_streamable_shell_tool: false,
             include_view_image_tool: true,
@@ -1212,14 +1286,15 @@ mod tests {
 
     #[test]
     fn test_mcp_tool_integer_normalized_to_number() {
-        let model_family =
-            find_family_for_model("o3", built_in_model_capabilities()).expect("o3 should be a valid model family");
+        let model_family = find_family_for_model("o3", built_in_model_capabilities())
+            .expect("o3 should be a valid model family");
         let config = ToolsConfig::new(&ToolsConfigParams {
             model_family: &model_family,
             approval_policy: AskForApproval::Never,
             sandbox_policy: SandboxPolicy::ReadOnly,
             include_plan_tool: false,
             include_apply_patch_tool: false,
+            model_apply_patch_tool: None,
             include_web_search_request: true,
             use_streamable_shell_tool: false,
             include_view_image_tool: true,
@@ -1278,14 +1353,15 @@ mod tests {
 
     #[test]
     fn test_mcp_tool_array_without_items_gets_default_string_items() {
-        let model_family =
-            find_family_for_model("o3", built_in_model_capabilities()).expect("o3 should be a valid model family");
+        let model_family = find_family_for_model("o3", built_in_model_capabilities())
+            .expect("o3 should be a valid model family");
         let config = ToolsConfig::new(&ToolsConfigParams {
             model_family: &model_family,
             approval_policy: AskForApproval::Never,
             sandbox_policy: SandboxPolicy::ReadOnly,
             include_plan_tool: false,
             include_apply_patch_tool: false,
+            model_apply_patch_tool: None,
             include_web_search_request: true,
             use_streamable_shell_tool: false,
             include_view_image_tool: true,
@@ -1347,14 +1423,15 @@ mod tests {
 
     #[test]
     fn test_mcp_tool_anyof_defaults_to_string() {
-        let model_family =
-            find_family_for_model("o3", built_in_model_capabilities()).expect("o3 should be a valid model family");
+        let model_family = find_family_for_model("o3", built_in_model_capabilities())
+            .expect("o3 should be a valid model family");
         let config = ToolsConfig::new(&ToolsConfigParams {
             model_family: &model_family,
             approval_policy: AskForApproval::Never,
             sandbox_policy: SandboxPolicy::ReadOnly,
             include_plan_tool: false,
             include_apply_patch_tool: false,
+            model_apply_patch_tool: None,
             include_web_search_request: true,
             use_streamable_shell_tool: false,
             include_view_image_tool: true,
@@ -1413,14 +1490,15 @@ mod tests {
 
     #[test]
     fn test_mcp_tool_additional_properties_schema_defaults_to_true() {
-        let model_family =
-            find_family_for_model("o3", built_in_model_capabilities()).expect("o3 should be a valid model family");
+        let model_family = find_family_for_model("o3", built_in_model_capabilities())
+            .expect("o3 should be a valid model family");
         let config = ToolsConfig::new(&ToolsConfigParams {
             model_family: &model_family,
             approval_policy: AskForApproval::Never,
             sandbox_policy: SandboxPolicy::ReadOnly,
             include_plan_tool: false,
             include_apply_patch_tool: false,
+            model_apply_patch_tool: None,
             include_web_search_request: true,
             use_streamable_shell_tool: false,
             include_view_image_tool: true,
