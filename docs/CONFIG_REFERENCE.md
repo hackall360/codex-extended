@@ -12,6 +12,9 @@ Core config.toml fields (codex-rs/core)
 - model_max_output_tokens: Optional u64; max output tokens.
 - model_provider_id: String key into model_providers map.
 - model_provider: Provider definition for HTTP client (derived from provider map + overrides).
+- model_needs_special_apply_patch_instructions: bool; include extra `apply_patch` instructions.
+- model_uses_local_shell_tool: bool; expose implicit `local_shell` tool.
+- model_apply_patch_tool: function|freeform|none; override `apply_patch` tool call style.
 - approval_policy: Command approval policy; values: untrusted|on-failure|on-request|never.
 - sandbox_policy: Tool sandbox policy; values: danger-full-access|read-only|workspace-write.
 - shell_environment_policy: Policy controlling env var inheritance; see section below.
@@ -101,7 +104,10 @@ Provider families
 
 - OpenAI/Chat-compatible backends: use wire_api: chat, tool choice auto, parallel_tool_calls disabled by default for tool serialism.
 - Responses API backends: use wire_api: responses; tool definitions expose strict schema when required.
-- OSS providers: configure base_url; set env_key to pick up API key from env.
+- OSS providers: configure base_url; set env_key to pick up API key from env. For
+  Ollama, Codex fetches model metadata (e.g., `num_ctx`) and fills in
+  `model_context_window` and other defaults automatically; override with
+  `model_*` keys if required.
 
 Server/Client split
 
@@ -142,3 +148,14 @@ export CODEX_SERVER_URL=http://localhost:8080
 ```
 
 codex-server (server side) embedding model selection depends on its `backend_url` and server configuration. Point it at your local models (e.g., Ollama) or API providers, and it will serve embeddings via `/v1/embeddings`.
+
+### Troubleshooting
+
+When model behaviour is unexpected, inspect Codex's cached metadata with:
+
+```shell
+codex models info <model>
+```
+
+This displays discovered details like `num_ctx`, helping verify automatic
+Ollama lookups and any `model_*` overrides.

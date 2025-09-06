@@ -113,6 +113,19 @@ instance. If you do not specify a `model`, Codex automatically selects the
 first model reported by Ollama. When no models are installed, Codex downloads
 the default `gpt-oss:20b` model.
 
+When a model is selected, Codex queries Ollama for metadata such as
+`num_ctx` and uses it to populate `model_context_window` and
+`model_max_output_tokens` automatically. If the detected values are
+incorrect or you want to override other behaviour, set the relevant
+`model_*` keys:
+
+```toml
+model = "llama3.1"
+model_provider = "ollama"
+model_context_window = 8192        # override num_ctx
+model_uses_local_shell_tool = true # example capability override
+```
+
 Or a third-party provider (using a distinct environment variable for the API key):
 
 ```toml
@@ -814,3 +827,15 @@ planner = { model = "gpt-4o-mini" }
 name = "manager"
 model_role = "planner"
 ```
+
+## Troubleshooting
+
+If Codex reports unexpected context windows or capabilities, inspect what it
+knows about a model with:
+
+```shell
+codex models info <model>
+```
+
+The command lists the metadata (including `num_ctx`) that Codex uses when
+scheduling requests.

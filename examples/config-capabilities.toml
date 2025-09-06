@@ -1,0 +1,13 @@
+# Example Codex client configuration with custom model capabilities
+model = "llama3.1"
+model_provider = "ollama"
+
+[model_providers.ollama]
+name = "Ollama"
+base_url = "http://localhost:11434/v1"
+
+[model_capabilities."llama3.1"]
+uses_local_shell_tool = true
+needs_special_apply_patch_instructions = true
+apply_patch_tool_type = "function"
+
