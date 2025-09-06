@@ -67,6 +67,28 @@ The model that Codex should use.
 model = "o3"  # overrides the default of "gpt-5"
 ```
 
+## default_language and default_toolchain
+
+These settings establish the language Codex should assume when generating
+code and the associated toolchain or runtime version to use. They are
+optional and default to using the model's best guess.
+
+Examples:
+
+```toml
+# Rust using the stable toolchain
+default_language = "rust"
+default_toolchain = "stable"
+
+# Python 3.11
+default_language = "python"
+default_toolchain = "3.11"
+
+# JavaScript via Node.js 20
+default_language = "javascript"
+default_toolchain = "node-20"
+```
+
 ## model_providers
 
 This option lets you override and amend the default set of model providers bundled with Codex. This value is a map where the key is the value to use with `model_provider` to select the corresponding provider.
@@ -773,6 +795,8 @@ auto_compact_tolerance_percent = 8
 | `stream_idle_timeout_ms`                         | number             | Global default SSE idle timeout (ms) applied to selected provider.                         |
 | `project_doc_max_bytes`                          | number             | Max bytes to read from `AGENTS.md`.                                                        |
 | `command_timeout_ms`                             | number or `"none"` | Default host command timeout in ms or disable with `"none"`.                               |
+| `default_language`                              | string             | Preferred programming language for generated code.                     |
+| `default_toolchain`                             | string             | Toolchain or runtime version associated with `default_language`.       |
 | `profile`                                        | string             | Active profile name.                                                                       |
 | `profiles.<name>.*`                              | various            | Profile‑scoped overrides of the same keys.                                                 |
 | `history.persistence`                            | `save-all`         | `none`                                                                                     | History file persistence (default: `save-all`).  |

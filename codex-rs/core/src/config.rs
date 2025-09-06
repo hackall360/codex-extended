@@ -14,9 +14,9 @@ use crate::config_types::Tui;
 use crate::config_types::UriBasedFileOpener;
 use crate::config_types::Verbosity;
 use crate::git_info::resolve_root_git_project_for_trust;
-use crate::model_family::{ModelFamily, built_in_model_capabilities, find_family_for_model};
-use crate::model_provider_info::ModelProviderInfo;
+use crate::model_family::{built_in_model_capabilities, find_family_for_model, ModelFamily};
 use crate::model_provider_info::built_in_model_providers;
+use crate::model_provider_info::ModelProviderInfo;
 use crate::openai_model_info::get_model_info;
 use crate::protocol::AskForApproval;
 use crate::protocol::SandboxPolicy;
@@ -168,6 +168,12 @@ pub struct Config {
     ///
     /// When this program is invoked, arg0 will be set to `codex-linux-sandbox`.
     pub codex_linux_sandbox_exe: Option<PathBuf>,
+
+    /// Default programming language used when none is specified.
+    pub default_language: Option<String>,
+
+    /// Default toolchain or version associated with `default_language`.
+    pub default_toolchain: Option<String>,
 
     /// Value to use for `reasoning.effort` when making a request using the
     /// Responses API.
@@ -509,6 +515,12 @@ pub struct ConfigToml {
 
     /// Collection of settings that are specific to the TUI.
     pub tui: Option<Tui>,
+
+    /// Default programming language used when none is specified.
+    pub default_language: Option<String>,
+
+    /// Default toolchain or runtime version for `default_language`.
+    pub default_toolchain: Option<String>,
 
     /// When set to `true`, `AgentReasoning` events will be hidden from the
     /// UI/output. Defaults to `false`.
@@ -1012,6 +1024,8 @@ impl Config {
             file_opener: cfg.file_opener.unwrap_or(UriBasedFileOpener::VsCode),
             tui: tui_cfg,
             codex_linux_sandbox_exe,
+            default_language: cfg.default_language,
+            default_toolchain: cfg.default_toolchain,
 
             hide_agent_reasoning: cfg.hide_agent_reasoning.unwrap_or(false),
             show_raw_agent_reasoning: cfg
@@ -1412,6 +1426,8 @@ disable_response_storage = true
                 file_opener: UriBasedFileOpener::VsCode,
                 tui: Tui::default(),
                 codex_linux_sandbox_exe: None,
+                default_language: None,
+                default_toolchain: None,
                 hide_agent_reasoning: false,
                 show_raw_agent_reasoning: false,
                 model_reasoning_effort: ReasoningEffort::High,
@@ -1475,6 +1491,8 @@ disable_response_storage = true
             file_opener: UriBasedFileOpener::VsCode,
             tui: Tui::default(),
             codex_linux_sandbox_exe: None,
+            default_language: None,
+            default_toolchain: None,
             hide_agent_reasoning: false,
             show_raw_agent_reasoning: false,
             model_reasoning_effort: ReasoningEffort::default(),
@@ -1553,6 +1571,8 @@ disable_response_storage = true
             file_opener: UriBasedFileOpener::VsCode,
             tui: Tui::default(),
             codex_linux_sandbox_exe: None,
+            default_language: None,
+            default_toolchain: None,
             hide_agent_reasoning: false,
             show_raw_agent_reasoning: false,
             model_reasoning_effort: ReasoningEffort::default(),
