@@ -1,9 +1,10 @@
 pub mod adapter;
 pub mod error;
+pub mod langs;
 pub mod parser;
 pub mod serializer;
 
-pub use adapter::MulAdapter;
+pub use adapter::{JsonAdapter, MulAdapter};
 pub use error::MulError;
 
 use serde::{Deserialize, Serialize};
