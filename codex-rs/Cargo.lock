@@ -927,6 +927,7 @@ dependencies = [
  "codex-exec",
  "codex-login",
  "codex-mcp-server",
+ "codex-mul",
  "codex-protocol",
  "codex-protocol-ts",
  "codex-tui",
