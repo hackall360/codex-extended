@@ -1,0 +1,5 @@
+---
+source: core/tests/mul_e2e.rs
+expression: src
+---
+"{"statements":[{"Let":{"name":"a","value":{"Number":2}}},{"Let":{"name":"b","value":{"Number":3}}},{"Mul":{"name":"c","left":{"Variable":"a"},"right":{"Variable":"b"}}}]}"
