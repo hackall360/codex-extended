@@ -1,3 +1,4 @@
+use clap::ArgAction;
 use clap::CommandFactory;
 use clap::Parser;
 use clap_complete::Shell;
@@ -37,6 +38,10 @@ mod commands;
 struct MultitoolCli {
     #[clap(flatten)]
     pub config_overrides: CliConfigOverrides,
+
+    /// Select one or more toolchain adapters.
+    #[arg(long = "toolchain", value_name = "LANG", action = ArgAction::Append, global = true)]
+    pub toolchain: Vec<String>,
 
     #[clap(flatten)]
     interactive: TuiCli,
@@ -80,6 +85,9 @@ enum Subcommand {
     /// Internal: generate TypeScript protocol bindings.
     #[clap(hide = true)]
     GenerateTs(GenerateTsCommand),
+
+    /// Convert MUL programs between languages.
+    Mul(commands::mul::MulCli),
 }
 
 #[derive(Debug, Parser)]
@@ -147,7 +155,19 @@ fn main() -> anyhow::Result<()> {
 }
 
 async fn cli_main(codex_linux_sandbox_exe: Option<PathBuf>) -> anyhow::Result<()> {
-    let cli = MultitoolCli::parse();
+    let mut cli = MultitoolCli::parse();
+
+    if !cli.toolchain.is_empty() {
+        let joined = cli
+            .toolchain
+            .iter()
+            .map(|lang| format!("\"{lang}\""))
+            .collect::<Vec<_>>()
+            .join(",");
+        cli.config_overrides
+            .raw_overrides
+            .push(format!("toolchain=[{joined}]"));
+    }
 
     match cli.subcommand {
         None => {
@@ -219,6 +239,18 @@ async fn cli_main(codex_linux_sandbox_exe: Option<PathBuf>) -> anyhow::Result<()
         }
         Some(Subcommand::GenerateTs(gen_cli)) => {
             codex_protocol_ts::generate_ts(&gen_cli.out_dir, gen_cli.prettier.as_deref())?;
+        }
+        Some(Subcommand::Mul(mut mul_cli)) => {
+            mul_cli
+                .config_overrides
+                .raw_overrides
+                .push(format!("mul.from=\"{}\"", mul_cli.from.clone()));
+            mul_cli
+                .config_overrides
+                .raw_overrides
+                .push(format!("mul.to=\"{}\"", mul_cli.to.clone()));
+            prepend_config_flags(&mut mul_cli.config_overrides, cli.config_overrides);
+            commands::mul::run(mul_cli);
         }
     }
 
