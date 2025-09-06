@@ -18,6 +18,7 @@ use codex_tui::Cli as TuiCli;
 use std::path::PathBuf;
 
 use crate::proto::ProtoCli;
+mod commands;
 
 /// Codex CLI
 ///
@@ -68,6 +69,9 @@ enum Subcommand {
 
     /// Internal debugging commands.
     Debug(DebugArgs),
+
+    /// Model inspection commands.
+    Models(commands::models::ModelsCli),
 
     /// Apply the latest diff produced by Codex agent as a `git apply` to your local working tree.
     #[clap(visible_alias = "a")]
@@ -205,6 +209,10 @@ async fn cli_main(codex_linux_sandbox_exe: Option<PathBuf>) -> anyhow::Result<()
                 .await?;
             }
         },
+        Some(Subcommand::Models(mut models_cli)) => {
+            prepend_config_flags(&mut models_cli.config_overrides, cli.config_overrides);
+            commands::models::run(models_cli);
+        }
         Some(Subcommand::Apply(mut apply_cli)) => {
             prepend_config_flags(&mut apply_cli.config_overrides, cli.config_overrides);
             run_apply_command(apply_cli, None).await?;
