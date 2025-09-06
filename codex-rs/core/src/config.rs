@@ -6,6 +6,7 @@ use crate::config_types::EditMode;
 use crate::config_types::History;
 use crate::config_types::McpServerConfig;
 use crate::config_types::ModelRole;
+use crate::config_types::ModelCapabilities;
 use crate::config_types::SandboxWorkspaceWrite;
 use crate::config_types::ShellEnvironmentPolicy;
 use crate::config_types::ShellEnvironmentPolicyToml;
@@ -13,9 +14,7 @@ use crate::config_types::Tui;
 use crate::config_types::UriBasedFileOpener;
 use crate::config_types::Verbosity;
 use crate::git_info::resolve_root_git_project_for_trust;
-use crate::model_family::{
-    built_in_model_capabilities, find_family_for_model, ModelCapabilities, ModelFamily,
-};
+use crate::model_family::{built_in_model_capabilities, find_family_for_model, ModelFamily};
 use crate::model_provider_info::built_in_model_providers;
 use crate::model_provider_info::ModelProviderInfo;
 use crate::openai_model_info::get_model_info;
@@ -536,8 +535,10 @@ pub struct ConfigToml {
     /// Override to force-enable reasoning summaries for the configured model.
     pub model_supports_reasoning_summaries: Option<bool>,
     /// Top-level flag to require special apply_patch instructions for the configured model.
+    /// Defaults to `false`.
     pub model_needs_special_apply_patch_instructions: Option<bool>,
     /// Top-level flag to include the implicit local_shell tool for the configured model.
+    /// Defaults to `false`.
     pub model_uses_local_shell_tool: Option<bool>,
     /// Preferred apply_patch tool call style for the configured model.
     pub model_apply_patch_tool: Option<ApplyPatchToolConfig>,
