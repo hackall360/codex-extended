@@ -1,6 +1,5 @@
-use crate::MulProgram;
-use serde_json::Error;
+use crate::{MulProgram, error::Result};
 
-pub fn parse_program(input: &str) -> Result<MulProgram, Error> {
-    serde_json::from_str(input)
+pub fn parse_program(input: &str) -> Result<MulProgram> {
+    Ok(serde_json::from_str(input)?)
 }

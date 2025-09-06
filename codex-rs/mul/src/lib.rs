@@ -1,5 +1,10 @@
+pub mod adapter;
+pub mod error;
 pub mod parser;
 pub mod serializer;
+
+pub use adapter::MulAdapter;
+pub use error::MulError;
 
 use serde::{Deserialize, Serialize};
 
