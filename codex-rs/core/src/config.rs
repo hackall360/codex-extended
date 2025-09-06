@@ -5,8 +5,8 @@ use crate::config_types::CommandTimeoutMs;
 use crate::config_types::EditMode;
 use crate::config_types::History;
 use crate::config_types::McpServerConfig;
-use crate::config_types::ModelRole;
 use crate::config_types::ModelCapabilities;
+use crate::config_types::ModelRole;
 use crate::config_types::SandboxWorkspaceWrite;
 use crate::config_types::ShellEnvironmentPolicy;
 use crate::config_types::ShellEnvironmentPolicyToml;
@@ -14,9 +14,9 @@ use crate::config_types::Tui;
 use crate::config_types::UriBasedFileOpener;
 use crate::config_types::Verbosity;
 use crate::git_info::resolve_root_git_project_for_trust;
-use crate::model_family::{built_in_model_capabilities, find_family_for_model, ModelFamily};
-use crate::model_provider_info::built_in_model_providers;
+use crate::model_family::{ModelFamily, built_in_model_capabilities, find_family_for_model};
 use crate::model_provider_info::ModelProviderInfo;
+use crate::model_provider_info::built_in_model_providers;
 use crate::openai_model_info::get_model_info;
 use crate::protocol::AskForApproval;
 use crate::protocol::SandboxPolicy;
@@ -1153,6 +1153,7 @@ mod tests {
     use crate::config_types::HistoryPersistence;
 
     use super::*;
+    use async_trait::async_trait;
     use pretty_assertions::assert_eq;
     use tempfile::TempDir;
 
@@ -1641,6 +1642,63 @@ trust_level = "trusted"
 "#
         );
         assert_eq!(contents, expected);
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn per_model_overrides_win_over_provider_and_built_in() -> std::io::Result<()> {
+        // Config overrides provide explicit model limits.
+        let cfg = ConfigToml {
+            model: Some("gpt-4o".to_string()),
+            model_context_window: Some(42),
+            model_max_output_tokens: Some(24),
+            ..Default::default()
+        };
+        let cwd = TempDir::new().unwrap();
+        let codex_home = TempDir::new().unwrap();
+        let mut config = Config::load_from_base_config_with_overrides(
+            cfg,
+            ConfigOverrides {
+                cwd: Some(cwd.path().to_path_buf()),
+                ..Default::default()
+            },
+            codex_home.path().to_path_buf(),
+        )?;
+
+        // Built-in metadata for gpt-4o should be ignored in favour of overrides.
+        assert_eq!(config.model_context_window, Some(42));
+        assert_eq!(config.model_max_output_tokens, Some(24));
+
+        struct DummyProvider;
+        #[async_trait]
+        impl ModelMetadataProvider for DummyProvider {
+            async fn fetch_model_metadata(
+                &self,
+                _model: &str,
+            ) -> std::io::Result<Option<ModelMetadata>> {
+                Ok(Some(ModelMetadata {
+                    context_window: Some(84),
+                    max_output_tokens: Some(48),
+                }))
+            }
+        }
+
+        async fn apply_provider<P: ModelMetadataProvider>(cfg: &mut Config, p: &P) {
+            if let Ok(Some(meta)) = p.fetch_model_metadata(&cfg.model).await {
+                if cfg.model_context_window.is_none() {
+                    cfg.model_context_window = meta.context_window;
+                }
+                if cfg.model_max_output_tokens.is_none() {
+                    cfg.model_max_output_tokens = meta.max_output_tokens;
+                }
+            }
+        }
+
+        // Provider discovery should not override explicit per-model settings.
+        apply_provider(&mut config, &DummyProvider).await;
+        assert_eq!(config.model_context_window, Some(42));
+        assert_eq!(config.model_max_output_tokens, Some(24));
 
         Ok(())
     }
