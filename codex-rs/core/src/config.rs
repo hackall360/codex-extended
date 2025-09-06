@@ -1,5 +1,6 @@
 use crate::config_profile::ConfigProfile;
 use crate::config_types::AgentConfigEntry;
+use crate::config_types::ApplyPatchToolConfig;
 use crate::config_types::CommandTimeoutMs;
 use crate::config_types::EditMode;
 use crate::config_types::History;
@@ -15,13 +16,12 @@ use crate::git_info::resolve_root_git_project_for_trust;
 use crate::model_family::{
     built_in_model_capabilities, find_family_for_model, ModelCapabilities, ModelFamily,
 };
-use crate::tool_apply_patch::ApplyPatchToolType;
-use crate::model_provider_info::ModelProviderInfo;
 use crate::model_provider_info::built_in_model_providers;
+use crate::model_provider_info::ModelProviderInfo;
 use crate::openai_model_info::get_model_info;
-use async_trait::async_trait;
 use crate::protocol::AskForApproval;
 use crate::protocol::SandboxPolicy;
+use async_trait::async_trait;
 use codex_login::AuthMode;
 use codex_protocol::config_types::ReasoningEffort;
 use codex_protocol::config_types::ReasoningSummary;
@@ -56,10 +56,7 @@ pub struct ModelMetadata {
 /// A trait for fetching model metadata such as context window sizes.
 #[async_trait]
 pub trait ModelMetadataProvider {
-    async fn fetch_model_metadata(
-        &self,
-        model: &str,
-    ) -> std::io::Result<Option<ModelMetadata>>;
+    async fn fetch_model_metadata(&self, model: &str) -> std::io::Result<Option<ModelMetadata>>;
 }
 
 /// Application configuration loaded from disk and merged with overrides.
@@ -197,6 +194,9 @@ pub struct Config {
     /// file edits as a structured tool call. When unset, this falls back to the
     /// model family's default preference.
     pub include_apply_patch_tool: bool,
+
+    /// Preferred apply_patch tool call style for the configured model.
+    pub model_apply_patch_tool: Option<ApplyPatchToolConfig>,
 
     pub tools_web_search_request: bool,
 
@@ -540,7 +540,7 @@ pub struct ConfigToml {
     /// Top-level flag to include the implicit local_shell tool for the configured model.
     pub model_uses_local_shell_tool: Option<bool>,
     /// Preferred apply_patch tool call style for the configured model.
-    pub model_apply_patch_tool_type: Option<ApplyPatchToolType>,
+    pub model_apply_patch_tool: Option<ApplyPatchToolConfig>,
 
     /// User-defined capabilities per model slug.
     #[serde(default)]
@@ -847,7 +847,6 @@ impl Config {
         if cfg.model_supports_reasoning_summaries.is_some()
             || cfg.model_needs_special_apply_patch_instructions.is_some()
             || cfg.model_uses_local_shell_tool.is_some()
-            || cfg.model_apply_patch_tool_type.is_some()
         {
             let caps = model_capabilities.entry(model.clone()).or_default();
             if let Some(v) = cfg.model_supports_reasoning_summaries {
@@ -859,22 +858,16 @@ impl Config {
             if let Some(v) = cfg.model_uses_local_shell_tool {
                 caps.uses_local_shell_tool = v;
             }
-            if let Some(v) = cfg.model_apply_patch_tool_type {
-                caps.apply_patch_tool_type = Some(v);
-            }
         }
 
         let model_family =
             find_family_for_model(&model, &model_capabilities).unwrap_or_else(|| {
-                let caps = model_capabilities
-                    .get(&model)
-                    .cloned()
-                    .unwrap_or_default();
+                let caps = model_capabilities.get(&model).cloned().unwrap_or_default();
                 ModelFamily {
                     slug: model.clone(),
                     family: model.clone(),
-                    needs_special_apply_patch_instructions:
-                        caps.needs_special_apply_patch_instructions,
+                    needs_special_apply_patch_instructions: caps
+                        .needs_special_apply_patch_instructions,
                     supports_reasoning_summaries: caps.supports_reasoning_summaries,
                     uses_local_shell_tool: caps.uses_local_shell_tool,
                     apply_patch_tool_type: caps.apply_patch_tool_type,
@@ -1041,6 +1034,7 @@ impl Config {
             experimental_resume,
             include_plan_tool: include_plan_tool.unwrap_or(false),
             include_apply_patch_tool: include_apply_patch_tool.unwrap_or(false),
+            model_apply_patch_tool: cfg.model_apply_patch_tool,
             tools_web_search_request,
             responses_originator_header,
             preferred_auth_method: cfg.preferred_auth_method.unwrap_or(AuthMode::ChatGPT),
@@ -1250,6 +1244,12 @@ exclude_slash_tmp = true
         );
     }
 
+    #[test]
+    fn model_apply_patch_tool_rejects_unknown_values() {
+        let toml = r#"model_apply_patch_tool = "invalid""#;
+        assert!(toml::from_str::<ConfigToml>(toml).is_err());
+    }
+
     struct PrecedenceTestFixture {
         cwd: TempDir,
         codex_home: TempDir,
@@ -1420,6 +1420,7 @@ disable_response_storage = true
                 base_instructions: None,
                 include_plan_tool: false,
                 include_apply_patch_tool: false,
+                model_apply_patch_tool: None,
                 tools_web_search_request: false,
                 responses_originator_header: "codex_cli_rs".to_string(),
                 preferred_auth_method: AuthMode::ChatGPT,
@@ -1449,11 +1450,8 @@ disable_response_storage = true
         )?;
         let expected_gpt3_profile_config = Config {
             model: "gpt-3.5-turbo".to_string(),
-            model_family: find_family_for_model(
-                "gpt-3.5-turbo",
-                built_in_model_capabilities(),
-            )
-            .expect("known model slug"),
+            model_family: find_family_for_model("gpt-3.5-turbo", built_in_model_capabilities())
+                .expect("known model slug"),
             model_context_window: Some(16_385),
             model_max_output_tokens: Some(4_096),
             model_provider_id: "openai-chat-completions".to_string(),
@@ -1485,6 +1483,7 @@ disable_response_storage = true
             base_instructions: None,
             include_plan_tool: false,
             include_apply_patch_tool: false,
+            model_apply_patch_tool: None,
             tools_web_search_request: false,
             responses_originator_header: "codex_cli_rs".to_string(),
             preferred_auth_method: AuthMode::ChatGPT,
@@ -1562,6 +1561,7 @@ disable_response_storage = true
             base_instructions: None,
             include_plan_tool: false,
             include_apply_patch_tool: false,
+            model_apply_patch_tool: None,
             tools_web_search_request: false,
             responses_originator_header: "codex_cli_rs".to_string(),
             preferred_auth_method: AuthMode::ChatGPT,
