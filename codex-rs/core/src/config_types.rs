@@ -11,6 +11,10 @@ use serde::Deserialize;
 use serde::Serialize;
 use strum_macros::Display;
 
+/// Per-model capability flags that can be configured via `config.toml`.
+/// All boolean fields default to `false` when unspecified.
+pub use crate::model_family::ModelCapabilities;
+
 #[derive(Deserialize, Debug, Clone, PartialEq)]
 pub struct McpServerConfig {
     pub command: String,

@@ -382,6 +382,7 @@ model_supports_reasoning_summaries = true
 ## model_needs_special_apply_patch_instructions
 
 Force the inclusion of extra instructions describing the virtual `apply_patch` CLI for the configured model.
+Defaults to `false`.
 
 ```toml
 model_needs_special_apply_patch_instructions = true
@@ -390,6 +391,7 @@ model_needs_special_apply_patch_instructions = true
 ## model_uses_local_shell_tool
 
 When set, the implicit `local_shell` tool is always available to the configured model.
+Defaults to `false`.
 
 ```toml
 model_uses_local_shell_tool = true
