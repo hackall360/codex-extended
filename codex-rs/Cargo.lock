@@ -975,6 +975,7 @@ dependencies = [
  "codex-file-search",
  "codex-login",
  "codex-mcp-client",
+ "codex-mul",
  "codex-protocol",
  "core_test_support",
  "dasp",

@@ -36,6 +36,8 @@ use crate::model_adapter::ModelAdapter;
 use crate::model_family::ModelFamily;
 use crate::model_provider_info::ModelProviderInfo;
 use crate::model_provider_info::WireApi;
+#[cfg(feature = "mul")]
+use crate::mul::{self, MulLanguage};
 use crate::openai_model_info::get_model_info;
 use crate::openai_tools::create_tools_json_for_responses_api;
 use crate::protocol::TokenUsage;
@@ -72,6 +74,8 @@ pub struct ModelClient {
     effort: ReasoningEffortConfig,
     summary: ReasoningSummaryConfig,
     adapter: Option<Arc<dyn ModelAdapter>>,
+    #[cfg(feature = "mul")]
+    mul_language: Option<MulLanguage>,
 }
 
 impl ModelClient {
@@ -112,6 +116,8 @@ impl ModelClient {
             effort,
             summary,
             adapter,
+            #[cfg(feature = "mul")]
+            mul_language: None,
         }
     }
 
@@ -129,6 +135,21 @@ impl ModelClient {
     /// the provider config.  Public callers always invoke `stream()` – the
     /// specialised helpers are private to avoid accidental misuse.
     pub async fn stream(&self, prompt: &Prompt) -> Result<ResponseStream> {
+        #[cfg(feature = "mul")]
+        let prompt = {
+            if let Some(lang) = self.mul_language {
+                let mut p = prompt.clone();
+                for item in &mut p.input {
+                    mul::encode(item, lang).map_err(|e| CodexErr::Stream(e.to_string(), None))?;
+                }
+                p
+            } else {
+                prompt.clone()
+            }
+        };
+        #[cfg(not(feature = "mul"))]
+        let prompt = prompt.clone();
+
         let wire_api = {
             self.provider
                 .lock()
@@ -136,7 +157,7 @@ impl ModelClient {
                 .wire_api
         };
         match wire_api {
-            WireApi::Responses => self.stream_responses(prompt).await,
+            WireApi::Responses => self.stream_responses(&prompt).await,
             WireApi::Chat => {
                 let provider = self
                     .provider
@@ -145,7 +166,7 @@ impl ModelClient {
                     .clone();
                 // Create the raw streaming connection first.
                 let response_stream = stream_chat_completions(
-                    prompt,
+                    &prompt,
                     &self.config.model_family,
                     &self.client,
                     &provider,
@@ -599,10 +620,16 @@ async fn process_sse<S>(
             // drop the duplicated list inside `response.completed`.
             "response.output_item.done" => {
                 let Some(item_val) = event.item else { continue };
-                let Ok(item) = serde_json::from_value::<ResponseItem>(item_val) else {
+                let Ok(mut item) = serde_json::from_value::<ResponseItem>(item_val) else {
                     debug!("failed to parse ResponseItem from output_item.done");
                     continue;
                 };
+                #[cfg(feature = "mul")]
+                if let Some(lang) = self.mul_language {
+                    if let Err(e) = mul::decode(&mut item, lang) {
+                        debug!("failed to decode MUL output: {e}");
+                    }
+                }
 
                 let event = ResponseEvent::OutputItemDone(item);
                 if tx_event.send(Ok(event)).await.is_err() {

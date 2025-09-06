@@ -13,6 +13,7 @@ mod client_common;
 pub mod codex;
 mod codex_conversation;
 pub use codex_conversation::CodexConversation;
+pub mod agents;
 pub mod autogen;
 pub mod config;
 pub mod config_profile;
@@ -26,7 +27,6 @@ pub mod exec_env;
 mod flags;
 pub mod git_info;
 mod is_safe_command;
-pub mod agents;
 #[cfg(target_os = "linux")]
 pub mod landlock;
 mod mcp_connection_manager;
@@ -47,6 +47,10 @@ pub use conversation_manager::ConversationManager;
 pub use conversation_manager::NewConversation;
 #[cfg(feature = "offline-voice")]
 pub mod local_voice;
+#[cfg(feature = "mul")]
+mod mul;
+#[cfg(feature = "mul")]
+pub use mul::*;
 mod math_tools;
 pub mod model_family;
 mod openai_model_info;
