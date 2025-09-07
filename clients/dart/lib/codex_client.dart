@@ -165,4 +165,9 @@ class CodexClient {
       (json) => RagReply.fromJson(json as Map<String, dynamic>),
     );
   }
+
+  Future<String> mul(String source, String from, String to) {
+    final payload = {'source': source, 'from': from, 'to': to};
+    return _post('/v1/mul', payload, (json) => json['output'] as String);
+  }
 }

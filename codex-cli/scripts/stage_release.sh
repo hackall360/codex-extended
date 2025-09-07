@@ -115,6 +115,7 @@ echo "Staged version $VERSION for release in $TMPDIR"
 echo "Verify the CLI:"
 echo "    node ${TMPDIR}/bin/codex.js --version"
 echo "    node ${TMPDIR}/bin/codex.js --help"
+echo "    echo 'module main { fn add(a:Int,b:Int)->Int{a+b;} }' | node ${TMPDIR}/bin/codex.js mul --from mul --to rust"
 
 # Print final hint for convenience
 echo "Next:  cd \"$TMPDIR\" && npm publish"

@@ -88,5 +88,19 @@ void main() {
       expect(reply.answer, '42');
       expect(reply.references.length, 1);
     });
+
+    test('mul', () async {
+      final mock = MockClient((request) async {
+        expect(request.url.path, '/v1/mul');
+        final body = jsonDecode(request.body) as Map<String, dynamic>;
+        expect(body['source'], '1');
+        expect(body['from'], 'mul');
+        expect(body['to'], 'rust');
+        return http.Response(jsonEncode({'output': 'translated'}), 200);
+      });
+      final client = CodexClient('http://x', httpClient: mock);
+      final out = await client.mul('1', 'mul', 'rust');
+      expect(out, 'translated');
+    });
   });
 }
