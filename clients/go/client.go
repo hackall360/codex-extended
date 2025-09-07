@@ -46,6 +46,13 @@ type VectorRecord struct {
 	Document string    `json:"document"`
 }
 
+// MulRequest represents a request to translate source code using MUL adapters.
+type MulRequest struct {
+	Source string `json:"source"`
+	From   string `json:"from"`
+	To     string `json:"to"`
+}
+
 func (c *Client) do(ctx context.Context, method, path string, reqBody, respBody interface{}) error {
 	var body io.Reader
 	if reqBody != nil {
@@ -166,4 +173,16 @@ func (c *Client) RAGAnswer(ctx context.Context, question string, topK int, tier 
 		refs[i] = Reference{Document: doc}
 	}
 	return Result{Answer: resp.Answer, References: refs}, nil
+}
+
+// Mul translates source code between languages using MUL adapters.
+func (c *Client) Mul(ctx context.Context, source, fromAdapter, toAdapter string) (string, error) {
+	req := MulRequest{Source: source, From: fromAdapter, To: toAdapter}
+	var resp struct {
+		Output string `json:"output"`
+	}
+	if err := c.do(ctx, http.MethodPost, "/v1/mul", &req, &resp); err != nil {
+		return "", err
+	}
+	return resp.Output, nil
 }

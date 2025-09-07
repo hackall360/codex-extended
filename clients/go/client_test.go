@@ -123,6 +123,31 @@ func TestRAGAnswer(t *testing.T) {
 	}
 }
 
+func TestMul(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/mul" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		var req MulRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			t.Fatalf("decode: %v", err)
+		}
+		if req.Source != "1" || req.From != "mul" || req.To != "rust" {
+			t.Fatalf("bad request: %+v", req)
+		}
+		json.NewEncoder(w).Encode(map[string]any{"output": "translated"})
+	}))
+	defer srv.Close()
+	c := NewClient(srv.URL)
+	out, err := c.Mul(context.Background(), "1", "mul", "rust")
+	if err != nil {
+		t.Fatalf("Mul: %v", err)
+	}
+	if out != "translated" {
+		t.Fatalf("unexpected output: %s", out)
+	}
+}
+
 func ExampleClient_Chat() {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(map[string]any{"reply": "hello"})
