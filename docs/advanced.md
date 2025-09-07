@@ -1,5 +1,7 @@
 ## Advanced
 
+Codex's cross-language features rely on a typed intermediate representation called MUL. See [MUL concepts](./mul.md) for an overview.
+
 ## Non-interactive / CI mode
 
 Run Codex head-less in pipelines. Example GitHub Action step:

@@ -14,6 +14,13 @@ If you want to add a new feature or change the behavior of an existing one, plea
 - Keep your changes focused. Multiple unrelated fixes should be opened as separate PRs.
 - Following the [development setup](#development-workflow) instructions above, ensure your change is free of lint warnings and test failures.
 
+### Adding language or tooling adapters
+
+- Open an issue to discuss the new adapter and get maintainer approval before starting work.
+- Implement the adapter (e.g. a `MulAdapter` for a new language or an analysis backend) with tests demonstrating round-trip conversions.
+- Update examples and `docs/mul.md` to list the new language or tooling.
+- Run the full test suite and include documentation for any new commands or configuration.
+
 ### Writing high-impact code changes
 
 1. **Start with an issue.** Open a new one or comment on an existing discussion so we can agree on the solution before code is written.
