@@ -1,5 +1,7 @@
 ## Getting started
 
+Codex translates between languages using a small intermediate representation called MUL. See [MUL concepts](./mul.md) for supported languages and tooling adapters.
+
 ### CLI usage
 
 | Command            | Purpose                            | Example                         |
