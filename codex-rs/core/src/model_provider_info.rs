@@ -291,6 +291,19 @@ pub fn built_in_model_providers() -> HashMap<String, ModelProviderInfo> {
             },
         ),
         (BUILT_IN_OSS_MODEL_PROVIDER_ID, create_oss_provider()),
+        ("ollama", create_ollama_provider("Ollama", None)),
+        (
+            "ollama-llama",
+            create_ollama_provider("Ollama Llama", Some("llama")),
+        ),
+        (
+            "ollama-granite",
+            create_ollama_provider("Ollama Granite", Some("granite")),
+        ),
+        (
+            "ollama-cogito",
+            create_ollama_provider("Ollama Cogito", Some("cogito")),
+        ),
     ]
     .into_iter()
     .map(|(k, v)| (k.to_string(), v))
@@ -332,6 +345,24 @@ pub fn create_oss_provider_with_base_url(base_url: &str) -> ModelProviderInfo {
         stream_max_retries: None,
         stream_idle_timeout_ms: None,
         model_family: None,
+        requires_openai_auth: false,
+    }
+}
+
+fn create_ollama_provider(name: &str, model_family: Option<&str>) -> ModelProviderInfo {
+    ModelProviderInfo {
+        name: name.into(),
+        base_url: Some(format!("http://localhost:{DEFAULT_OLLAMA_PORT}/v1")),
+        env_key: None,
+        env_key_instructions: None,
+        wire_api: WireApi::Chat,
+        query_params: None,
+        http_headers: None,
+        env_http_headers: None,
+        request_max_retries: None,
+        stream_max_retries: None,
+        stream_idle_timeout_ms: None,
+        model_family: model_family.map(|s| s.to_string()),
         requires_openai_auth: false,
     }
 }
@@ -428,5 +459,23 @@ env_http_headers = { "X-Example-Env-Header" = "EXAMPLE_ENV_VAR" }
 
         let provider: ModelProviderInfo = toml::from_str(azure_provider_toml).unwrap();
         assert_eq!(expected_provider, provider);
+    }
+
+    #[test]
+    fn test_built_in_includes_ollama_variants() {
+        let providers = built_in_model_providers();
+        assert!(providers.contains_key("ollama"));
+        assert_eq!(
+            providers["ollama-llama"].model_family.as_deref(),
+            Some("llama"),
+        );
+        assert_eq!(
+            providers["ollama-granite"].model_family.as_deref(),
+            Some("granite"),
+        );
+        assert_eq!(
+            providers["ollama-cogito"].model_family.as_deref(),
+            Some("cogito"),
+        );
     }
 }

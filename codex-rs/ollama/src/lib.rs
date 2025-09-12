@@ -1,8 +1,10 @@
+mod backend;
 mod client;
 mod parser;
 mod pull;
 mod url;
 
+pub use backend::OllamaBackend;
 pub use client::OllamaClient;
 use codex_core::config::Config;
 pub use pull::CliProgressReporter;
