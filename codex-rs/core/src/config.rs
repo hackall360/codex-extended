@@ -857,15 +857,30 @@ impl Config {
             .or(cfg.model)
             .unwrap_or_else(default_model);
 
-        let mut model_family = find_family_for_model(&model).unwrap_or_else(|| ModelFamily {
-            slug: model.clone(),
-            family: model.clone(),
-            needs_special_apply_patch_instructions: false,
-            supports_reasoning_summaries: false,
-            reasoning_summary_format: ReasoningSummaryFormat::None,
-            uses_local_shell_tool: false,
-            apply_patch_tool_type: None,
-        });
+        let mut model_family = find_family_for_model(&model)
+            .or_else(|| {
+                model_provider
+                    .model_family
+                    .as_ref()
+                    .map(|family| ModelFamily {
+                        slug: model.clone(),
+                        family: family.clone(),
+                        needs_special_apply_patch_instructions: false,
+                        supports_reasoning_summaries: false,
+                        reasoning_summary_format: ReasoningSummaryFormat::None,
+                        uses_local_shell_tool: false,
+                        apply_patch_tool_type: None,
+                    })
+            })
+            .unwrap_or_else(|| ModelFamily {
+                slug: model.clone(),
+                family: model.clone(),
+                needs_special_apply_patch_instructions: false,
+                supports_reasoning_summaries: false,
+                reasoning_summary_format: ReasoningSummaryFormat::None,
+                uses_local_shell_tool: false,
+                apply_patch_tool_type: None,
+            });
 
         if let Some(supports_reasoning_summaries) = cfg.model_supports_reasoning_summaries {
             model_family.supports_reasoning_summaries = supports_reasoning_summaries;
@@ -1384,6 +1399,7 @@ model_verbosity = "high"
             request_max_retries: Some(4),
             stream_max_retries: Some(10),
             stream_idle_timeout_ms: Some(300_000),
+            model_family: None,
             requires_openai_auth: false,
         };
         let model_provider_map = {

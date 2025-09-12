@@ -29,6 +29,7 @@ impl ModelInfo {
 
 pub(crate) fn get_model_info(model_family: &ModelFamily) -> Option<ModelInfo> {
     let slug = model_family.slug.as_str();
+    let slug_lower = slug.to_ascii_lowercase();
     match slug {
         // OSS models have a 128k shared token pool.
         // Arbitrarily splitting it: 3/4 input context, 1/4 output.
@@ -61,9 +62,13 @@ pub(crate) fn get_model_info(model_family: &ModelFamily) -> Option<ModelInfo> {
         // https://platform.openai.com/docs/models/gpt-3.5-turbo
         "gpt-3.5-turbo" => Some(ModelInfo::new(16_385, 4_096)),
 
-        _ if slug.starts_with("gpt-5") => Some(ModelInfo::new(272_000, 128_000)),
+        _ if slug_lower.starts_with("gpt-5") => Some(ModelInfo::new(272_000, 128_000)),
 
-        _ if slug.starts_with("codex-") => Some(ModelInfo::new(272_000, 128_000)),
+        _ if slug_lower.starts_with("codex-") => Some(ModelInfo::new(272_000, 128_000)),
+
+        _ if slug_lower.contains("llama") => Some(ModelInfo::new(128_000, 4_096)),
+        _ if slug_lower.contains("granite") => Some(ModelInfo::new(128_000, 4_096)),
+        _ if slug_lower.contains("cogito") => Some(ModelInfo::new(128_000, 4_096)),
 
         _ => None,
     }

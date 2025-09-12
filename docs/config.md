@@ -54,8 +54,13 @@ query_params = {}
 
 Note this makes it possible to use Codex CLI with non-OpenAI models, so long as they use a wire API that is compatible with the OpenAI chat completions API. For example, you could define the following provider to use Codex CLI with Ollama running locally:
 
+Codex ships with built‑in provider entries for a local Ollama instance at
+`http://localhost:11434/v1`, so you can simply set `model_provider = "ollama"`
+in your config without defining a custom block. If you need to override the base
+URL or other settings you can still add your own entry:
+
 ```toml
-[model_providers.ollama]
+[model_providers.ollama-custom]
 name = "Ollama"
 base_url = "http://localhost:11434/v1"
 ```
@@ -68,6 +73,25 @@ name = "Mistral"
 base_url = "https://api.mistral.ai/v1"
 env_key = "MISTRAL_API_KEY"
 ```
+
+Providers can optionally declare a default `model_family` to hint how Codex
+should treat models served by that backend. This is useful for non‑OpenAI
+providers whose model names do not map cleanly to a known family. Codex already
+exposes built‑in entries for several Ollama families:
+
+```toml
+# Use Llama models via a local Ollama instance
+model_provider = "ollama-llama"
+
+# Use Granite models via a local Ollama instance
+model_provider = "ollama-granite"
+
+# Use Cogito models via a local Ollama instance
+model_provider = "ollama-cogito"
+```
+
+When Codex cannot infer the model family from the model slug, it will fall back
+to the provider's `model_family` value.
 
 Note that Azure requires `api-version` to be passed as a query parameter, so be sure to specify it as part of `query_params` when defining the Azure provider:
 
