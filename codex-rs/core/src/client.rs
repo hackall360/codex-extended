@@ -806,6 +806,7 @@ mod tests {
             request_max_retries: Some(0),
             stream_max_retries: Some(0),
             stream_idle_timeout_ms: Some(1000),
+            model_family: None,
             requires_openai_auth: false,
         };
 
@@ -866,6 +867,7 @@ mod tests {
             request_max_retries: Some(0),
             stream_max_retries: Some(0),
             stream_idle_timeout_ms: Some(1000),
+            model_family: None,
             requires_openai_auth: false,
         };
 
@@ -900,6 +902,7 @@ mod tests {
             request_max_retries: Some(0),
             stream_max_retries: Some(0),
             stream_idle_timeout_ms: Some(1000),
+            model_family: None,
             requires_openai_auth: false,
         };
 
@@ -1005,6 +1008,7 @@ mod tests {
                 request_max_retries: Some(0),
                 stream_max_retries: Some(0),
                 stream_idle_timeout_ms: Some(1000),
+                model_family: None,
                 requires_openai_auth: false,
             };
 

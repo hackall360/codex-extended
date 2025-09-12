@@ -80,6 +80,11 @@ pub struct ModelProviderInfo {
     /// the connection as lost.
     pub stream_idle_timeout_ms: Option<u64>,
 
+    /// Default model family used by this provider's models. When set, Codex will
+    /// fall back to this family if it cannot infer one from the model slug.
+    #[serde(default)]
+    pub model_family: Option<String>,
+
     /// Does this provider require an OpenAI API Key or ChatGPT login token? If true,
     /// user is presented with login screen on first run, and login preference and token/key
     /// are stored in auth.json. If false (which is the default), login screen is skipped,
@@ -281,6 +286,7 @@ pub fn built_in_model_providers() -> HashMap<String, ModelProviderInfo> {
                 request_max_retries: None,
                 stream_max_retries: None,
                 stream_idle_timeout_ms: None,
+                model_family: None,
                 requires_openai_auth: true,
             },
         ),
@@ -325,6 +331,7 @@ pub fn create_oss_provider_with_base_url(base_url: &str) -> ModelProviderInfo {
         request_max_retries: None,
         stream_max_retries: None,
         stream_idle_timeout_ms: None,
+        model_family: None,
         requires_openai_auth: false,
     }
 }
@@ -352,6 +359,7 @@ base_url = "http://localhost:11434/v1"
             request_max_retries: None,
             stream_max_retries: None,
             stream_idle_timeout_ms: None,
+            model_family: None,
             requires_openai_auth: false,
         };
 
@@ -381,6 +389,7 @@ query_params = { api-version = "2025-04-01-preview" }
             request_max_retries: None,
             stream_max_retries: None,
             stream_idle_timeout_ms: None,
+            model_family: None,
             requires_openai_auth: false,
         };
 
@@ -413,6 +422,7 @@ env_http_headers = { "X-Example-Env-Header" = "EXAMPLE_ENV_VAR" }
             request_max_retries: None,
             stream_max_retries: None,
             stream_idle_timeout_ms: None,
+            model_family: None,
             requires_openai_auth: false,
         };
 

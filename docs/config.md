@@ -69,6 +69,20 @@ base_url = "https://api.mistral.ai/v1"
 env_key = "MISTRAL_API_KEY"
 ```
 
+Providers can optionally declare a default `model_family` to hint how Codex
+should treat models served by that backend. This is useful for non‑OpenAI
+providers whose model names do not map cleanly to a known family.
+
+```toml
+[model_providers.ollama-llama]
+name = "Ollama Llama"
+base_url = "http://localhost:11434/v1"
+model_family = "llama"
+```
+
+When Codex cannot infer the model family from the model slug, it will fall back
+to the provider's `model_family` value.
+
 Note that Azure requires `api-version` to be passed as a query parameter, so be sure to specify it as part of `query_params` when defining the Azure provider:
 
 ```toml

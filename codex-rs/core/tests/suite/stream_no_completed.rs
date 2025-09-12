@@ -87,6 +87,7 @@ async fn retries_on_early_close() {
         request_max_retries: Some(0),
         stream_max_retries: Some(1),
         stream_idle_timeout_ms: Some(2000),
+        model_family: None,
         requires_openai_auth: false,
     };
 
