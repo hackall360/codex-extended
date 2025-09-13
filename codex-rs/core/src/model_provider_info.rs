@@ -90,12 +90,21 @@ pub struct ModelProviderInfo {
     #[serde(default)]
     pub tool_bridge: Option<String>,
 
+    /// Whether the provider natively supports tool usage without additional
+    /// bridging. Defaults to `true` for backwards compatibility.
+    #[serde(default = "default_supports_tools")]
+    pub supports_tools: bool,
+
     /// Does this provider require an OpenAI API Key or ChatGPT login token? If true,
     /// user is presented with login screen on first run, and login preference and token/key
     /// are stored in auth.json. If false (which is the default), login screen is skipped,
     /// and API key (if needed) comes from the "env_key" environment variable.
     #[serde(default)]
     pub requires_openai_auth: bool,
+}
+
+fn default_supports_tools() -> bool {
+    true
 }
 
 impl ModelProviderInfo {
@@ -293,6 +302,7 @@ pub fn built_in_model_providers() -> HashMap<String, ModelProviderInfo> {
                 stream_idle_timeout_ms: None,
                 model_family: None,
                 tool_bridge: None,
+                supports_tools: true,
                 requires_openai_auth: true,
             },
         ),
@@ -352,6 +362,7 @@ pub fn create_oss_provider_with_base_url(base_url: &str) -> ModelProviderInfo {
         stream_idle_timeout_ms: None,
         model_family: None,
         tool_bridge: None,
+        supports_tools: true,
         requires_openai_auth: false,
     }
 }
@@ -370,7 +381,8 @@ fn create_ollama_provider(name: &str, model_family: Option<&str>) -> ModelProvid
         stream_max_retries: None,
         stream_idle_timeout_ms: None,
         model_family: model_family.map(|s| s.to_string()),
-        tool_bridge: Some("ollama".to_string()),
+        tool_bridge: None,
+        supports_tools: false,
         requires_openai_auth: false,
     }
 }
@@ -400,6 +412,7 @@ base_url = "http://localhost:11434/v1"
             stream_idle_timeout_ms: None,
             model_family: None,
             tool_bridge: None,
+            supports_tools: true,
             requires_openai_auth: false,
         };
 
@@ -431,6 +444,7 @@ query_params = { api-version = "2025-04-01-preview" }
             stream_idle_timeout_ms: None,
             model_family: None,
             tool_bridge: None,
+            supports_tools: true,
             requires_openai_auth: false,
         };
 
@@ -465,6 +479,7 @@ env_http_headers = { "X-Example-Env-Header" = "EXAMPLE_ENV_VAR" }
             stream_idle_timeout_ms: None,
             model_family: None,
             tool_bridge: None,
+            supports_tools: true,
             requires_openai_auth: false,
         };
 
@@ -488,5 +503,6 @@ env_http_headers = { "X-Example-Env-Header" = "EXAMPLE_ENV_VAR" }
             providers["ollama-cogito"].model_family.as_deref(),
             Some("cogito"),
         );
+        assert!(!providers["ollama"].supports_tools);
     }
 }

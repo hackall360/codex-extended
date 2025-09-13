@@ -89,7 +89,13 @@ impl ModelClient {
         conversation_id: ConversationId,
     ) -> Self {
         let client = create_client();
-        let tool_bridge = provider.tool_bridge.as_deref().and_then(create_tool_bridge);
+        let mut tool_bridge = provider.tool_bridge.as_deref().and_then(create_tool_bridge);
+        if tool_bridge.is_none() {
+            let is_ollama = provider.name.to_ascii_lowercase().contains("ollama");
+            if is_ollama && !provider.supports_tools {
+                tool_bridge = create_tool_bridge("ollama");
+            }
+        }
 
         Self {
             config,
@@ -850,6 +856,7 @@ mod tests {
             stream_idle_timeout_ms: Some(1000),
             model_family: None,
             tool_bridge: None,
+            supports_tools: true,
             requires_openai_auth: false,
         };
 
@@ -912,6 +919,7 @@ mod tests {
             stream_idle_timeout_ms: Some(1000),
             model_family: None,
             tool_bridge: None,
+            supports_tools: true,
             requires_openai_auth: false,
         };
 
@@ -948,6 +956,7 @@ mod tests {
             stream_idle_timeout_ms: Some(1000),
             model_family: None,
             tool_bridge: None,
+            supports_tools: true,
             requires_openai_auth: false,
         };
 
@@ -1055,6 +1064,7 @@ mod tests {
                 stream_idle_timeout_ms: Some(1000),
                 model_family: None,
                 tool_bridge: None,
+                supports_tools: true,
                 requires_openai_auth: false,
             };
 
