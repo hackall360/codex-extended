@@ -523,9 +523,11 @@ persistence = "none"  # "save-all" is the default value
 
 ## session_logging
 
-Codex also records a detailed transcript for each session under
-`$CODEX_HOME/sessions`. Set `session_logging` to `false` to disable this
-feature:
+Codex records a comprehensive JSONL transcript for each session under
+`$CODEX_HOME/sessions`. Each line captures every message, tool invocation,
+command output, and other runtime events so the entire interaction can be
+replayed or used for model fine‑tuning. Set `session_logging` to `false` to
+disable this feature:
 
 ```toml
 session_logging = false  # defaults to true
