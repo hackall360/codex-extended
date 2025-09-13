@@ -1416,6 +1416,7 @@ model_verbosity = "high"
             stream_idle_timeout_ms: Some(300_000),
             model_family: None,
             tool_bridge: None,
+            supports_tools: true,
             requires_openai_auth: false,
         };
         let model_provider_map = {

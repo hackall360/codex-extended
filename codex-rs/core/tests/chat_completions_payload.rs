@@ -57,6 +57,7 @@ async fn run_request(input: Vec<ResponseItem>) -> Value {
         stream_idle_timeout_ms: Some(5_000),
         model_family: None,
         tool_bridge: None,
+        supports_tools: true,
         requires_openai_auth: false,
     };
 
