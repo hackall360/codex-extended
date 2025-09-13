@@ -85,6 +85,11 @@ pub struct ModelProviderInfo {
     #[serde(default)]
     pub model_family: Option<String>,
 
+    /// Optional identifier for a tool bridge implementation to use with this
+    /// provider.
+    #[serde(default)]
+    pub tool_bridge: Option<String>,
+
     /// Does this provider require an OpenAI API Key or ChatGPT login token? If true,
     /// user is presented with login screen on first run, and login preference and token/key
     /// are stored in auth.json. If false (which is the default), login screen is skipped,
@@ -287,6 +292,7 @@ pub fn built_in_model_providers() -> HashMap<String, ModelProviderInfo> {
                 stream_max_retries: None,
                 stream_idle_timeout_ms: None,
                 model_family: None,
+                tool_bridge: None,
                 requires_openai_auth: true,
             },
         ),
@@ -345,6 +351,7 @@ pub fn create_oss_provider_with_base_url(base_url: &str) -> ModelProviderInfo {
         stream_max_retries: None,
         stream_idle_timeout_ms: None,
         model_family: None,
+        tool_bridge: None,
         requires_openai_auth: false,
     }
 }
@@ -363,6 +370,7 @@ fn create_ollama_provider(name: &str, model_family: Option<&str>) -> ModelProvid
         stream_max_retries: None,
         stream_idle_timeout_ms: None,
         model_family: model_family.map(|s| s.to_string()),
+        tool_bridge: None,
         requires_openai_auth: false,
     }
 }
@@ -391,6 +399,7 @@ base_url = "http://localhost:11434/v1"
             stream_max_retries: None,
             stream_idle_timeout_ms: None,
             model_family: None,
+            tool_bridge: None,
             requires_openai_auth: false,
         };
 
@@ -421,6 +430,7 @@ query_params = { api-version = "2025-04-01-preview" }
             stream_max_retries: None,
             stream_idle_timeout_ms: None,
             model_family: None,
+            tool_bridge: None,
             requires_openai_auth: false,
         };
 
@@ -454,6 +464,7 @@ env_http_headers = { "X-Example-Env-Header" = "EXAMPLE_ENV_VAR" }
             stream_max_retries: None,
             stream_idle_timeout_ms: None,
             model_family: None,
+            tool_bridge: None,
             requires_openai_auth: false,
         };
 

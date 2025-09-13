@@ -42,6 +42,8 @@ use crate::openai_model_info::get_model_info;
 use crate::openai_tools::create_tools_json_for_responses_api;
 use crate::protocol::TokenUsage;
 use crate::token_data::PlanType;
+use crate::tool_bridge::ToolBridge;
+use crate::tool_bridge::create_tool_bridge;
 use crate::util::backoff;
 use codex_protocol::config_types::ReasoningEffort as ReasoningEffortConfig;
 use codex_protocol::config_types::ReasoningSummary as ReasoningSummaryConfig;
@@ -74,6 +76,7 @@ pub struct ModelClient {
     conversation_id: ConversationId,
     effort: Option<ReasoningEffortConfig>,
     summary: ReasoningSummaryConfig,
+    tool_bridge: Option<Arc<dyn ToolBridge>>,
 }
 
 impl ModelClient {
@@ -86,6 +89,7 @@ impl ModelClient {
         conversation_id: ConversationId,
     ) -> Self {
         let client = create_client();
+        let tool_bridge = provider.tool_bridge.as_deref().and_then(create_tool_bridge);
 
         Self {
             config,
@@ -95,6 +99,7 @@ impl ModelClient {
             conversation_id,
             effort,
             summary,
+            tool_bridge,
         }
     }
 
@@ -114,12 +119,17 @@ impl ModelClient {
     /// the provider config.  Public callers always invoke `stream()` – the
     /// specialised helpers are private to avoid accidental misuse.
     pub async fn stream(&self, prompt: &Prompt) -> Result<ResponseStream> {
-        match self.provider.wire_api {
-            WireApi::Responses => self.stream_responses(prompt).await,
+        let mut prompt = prompt.clone();
+        if let Some(bridge) = self.tool_bridge.as_ref() {
+            bridge.encode_prompt(&mut prompt);
+        }
+
+        let base_stream = match self.provider.wire_api {
+            WireApi::Responses => self.stream_responses(&prompt).await?,
             WireApi::Chat => {
                 // Create the raw streaming connection first.
                 let response_stream = stream_chat_completions(
-                    prompt,
+                    &prompt,
                     &self.config.model_family,
                     &self.client,
                     &self.provider,
@@ -149,8 +159,40 @@ impl ModelClient {
                     }
                 });
 
-                Ok(ResponseStream { rx_event: rx })
+                ResponseStream { rx_event: rx }
             }
+        };
+
+        if let Some(bridge) = self.tool_bridge.clone() {
+            let (tx, rx) = mpsc::channel::<Result<ResponseEvent>>(16);
+            tokio::spawn(async move {
+                use futures::StreamExt;
+                let mut stream = base_stream;
+                while let Some(ev) = stream.next().await {
+                    match ev {
+                        Ok(event) => match bridge.decode_event(event) {
+                            Ok(events) => {
+                                for e in events {
+                                    if tx.send(Ok(e)).await.is_err() {
+                                        return;
+                                    }
+                                }
+                            }
+                            Err(err) => {
+                                let _ = tx.send(Err(err)).await;
+                                return;
+                            }
+                        },
+                        Err(err) => {
+                            let _ = tx.send(Err(err)).await;
+                            return;
+                        }
+                    }
+                }
+            });
+            Ok(ResponseStream { rx_event: rx })
+        } else {
+            Ok(base_stream)
         }
     }
 
@@ -807,6 +849,7 @@ mod tests {
             stream_max_retries: Some(0),
             stream_idle_timeout_ms: Some(1000),
             model_family: None,
+            tool_bridge: None,
             requires_openai_auth: false,
         };
 
@@ -868,6 +911,7 @@ mod tests {
             stream_max_retries: Some(0),
             stream_idle_timeout_ms: Some(1000),
             model_family: None,
+            tool_bridge: None,
             requires_openai_auth: false,
         };
 
@@ -903,6 +947,7 @@ mod tests {
             stream_max_retries: Some(0),
             stream_idle_timeout_ms: Some(1000),
             model_family: None,
+            tool_bridge: None,
             requires_openai_auth: false,
         };
 
@@ -1009,6 +1054,7 @@ mod tests {
                 stream_max_retries: Some(0),
                 stream_idle_timeout_ms: Some(1000),
                 model_family: None,
+                tool_bridge: None,
                 requires_openai_auth: false,
             };
 
