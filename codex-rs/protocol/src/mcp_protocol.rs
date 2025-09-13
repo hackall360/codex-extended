@@ -225,7 +225,8 @@ pub struct NewConversationResponse {
     /// Note this could be ignored by the model.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub reasoning_effort: Option<ReasoningEffort>,
-    pub rollout_path: PathBuf,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub rollout_path: Option<PathBuf>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, TS)]

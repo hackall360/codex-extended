@@ -387,10 +387,16 @@ impl Session {
                     RolloutRecorderParams::new(conversation_id, user_instructions.clone()),
                 )
             }
-            InitialHistory::Resumed(resumed_history) => (
-                resumed_history.conversation_id,
-                RolloutRecorderParams::resume(resumed_history.rollout_path.clone()),
-            ),
+            InitialHistory::Resumed(resumed_history) => {
+                let path = resumed_history
+                    .rollout_path
+                    .clone()
+                    .ok_or_else(|| anyhow::anyhow!("resume requires rollout path"))?;
+                (
+                    resumed_history.conversation_id,
+                    RolloutRecorderParams::resume(path),
+                )
+            }
         };
 
         // Error messages to dispatch after SessionConfigured is sent.
@@ -402,7 +408,15 @@ impl Session {
         // - spin up MCP connection manager
         // - perform default shell discovery
         // - load history metadata
-        let rollout_fut = RolloutRecorder::new(&config, rollout_params);
+        let rollout_fut = async {
+            if config.session_logging {
+                RolloutRecorder::new(&config, rollout_params)
+                    .await
+                    .map(Some)
+            } else {
+                Ok(None)
+            }
+        };
 
         let mcp_fut = McpConnectionManager::new(config.mcp_servers.clone());
         let default_shell_fut = shell::default_user_shell();
@@ -416,7 +430,7 @@ impl Session {
             error!("failed to initialize rollout recorder: {e:#}");
             anyhow::anyhow!("failed to initialize rollout recorder: {e:#}")
         })?;
-        let rollout_path = rollout_recorder.rollout_path.clone();
+        let rollout_path = rollout_recorder.as_ref().map(|r| r.rollout_path.clone());
         // Create the mutable state for the Session.
         let state = State {
             history: ConversationHistory::new(),
@@ -487,7 +501,7 @@ impl Session {
             unified_exec_manager: UnifiedExecSessionManager::default(),
             notify,
             state: Mutex::new(state),
-            rollout: Mutex::new(Some(rollout_recorder)),
+            rollout: Mutex::new(rollout_recorder.clone()),
             codex_linux_sandbox_exe: config.codex_linux_sandbox_exe.clone(),
             user_shell: default_shell,
             show_raw_agent_reasoning: config.show_raw_agent_reasoning,

@@ -16,57 +16,25 @@ pub(crate) fn is_persisted_response_item(item: &RolloutItem) -> bool {
 }
 
 /// Whether a `ResponseItem` should be persisted in rollout files.
+///
+/// For extreme local logging and downstream analysis we now persist **all**
+/// response items, including web search calls and any future variants. This
+/// provides a full record of the model's structured outputs for fine‑tuning
+/// or replay purposes.
 #[inline]
-pub(crate) fn should_persist_response_item(item: &ResponseItem) -> bool {
-    match item {
-        ResponseItem::Message { .. }
-        | ResponseItem::Reasoning { .. }
-        | ResponseItem::LocalShellCall { .. }
-        | ResponseItem::FunctionCall { .. }
-        | ResponseItem::FunctionCallOutput { .. }
-        | ResponseItem::CustomToolCall { .. }
-        | ResponseItem::CustomToolCallOutput { .. } => true,
-        ResponseItem::WebSearchCall { .. } | ResponseItem::Other => false,
-    }
+pub(crate) fn should_persist_response_item(_item: &ResponseItem) -> bool {
+    true
 }
 
 /// Whether an `EventMsg` should be persisted in rollout files.
+///
+/// To enable training on complete interaction histories we persist all runtime
+/// events except [`ConversationPath`], which simply echoes the location of the
+/// rollout file and adds no value to transcripts.
 #[inline]
 pub(crate) fn should_persist_event_msg(ev: &EventMsg) -> bool {
-    match ev {
-        EventMsg::UserMessage(_)
-        | EventMsg::AgentMessage(_)
-        | EventMsg::AgentReasoning(_)
-        | EventMsg::AgentReasoningRawContent(_)
-        | EventMsg::TokenCount(_) => true,
-        EventMsg::Error(_)
-        | EventMsg::TaskStarted(_)
-        | EventMsg::TaskComplete(_)
-        | EventMsg::AgentMessageDelta(_)
-        | EventMsg::AgentReasoningDelta(_)
-        | EventMsg::AgentReasoningRawContentDelta(_)
-        | EventMsg::AgentReasoningSectionBreak(_)
-        | EventMsg::SessionConfigured(_)
-        | EventMsg::McpToolCallBegin(_)
-        | EventMsg::McpToolCallEnd(_)
-        | EventMsg::WebSearchBegin(_)
-        | EventMsg::WebSearchEnd(_)
-        | EventMsg::ExecCommandBegin(_)
-        | EventMsg::ExecCommandOutputDelta(_)
-        | EventMsg::ExecCommandEnd(_)
-        | EventMsg::ExecApprovalRequest(_)
-        | EventMsg::ApplyPatchApprovalRequest(_)
-        | EventMsg::BackgroundEvent(_)
-        | EventMsg::StreamError(_)
-        | EventMsg::PatchApplyBegin(_)
-        | EventMsg::PatchApplyEnd(_)
-        | EventMsg::TurnDiff(_)
-        | EventMsg::GetHistoryEntryResponse(_)
-        | EventMsg::McpListToolsResponse(_)
-        | EventMsg::ListCustomPromptsResponse(_)
-        | EventMsg::PlanUpdate(_)
-        | EventMsg::TurnAborted(_)
-        | EventMsg::ShutdownComplete
-        | EventMsg::ConversationPath(_) => false,
-    }
+    !matches!(
+        ev,
+        EventMsg::ConversationPath(_) | EventMsg::SessionConfigured(_)
+    )
 }
