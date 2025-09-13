@@ -370,7 +370,7 @@ fn create_ollama_provider(name: &str, model_family: Option<&str>) -> ModelProvid
         stream_max_retries: None,
         stream_idle_timeout_ms: None,
         model_family: model_family.map(|s| s.to_string()),
-        tool_bridge: None,
+        tool_bridge: Some("ollama".to_string()),
         requires_openai_auth: false,
     }
 }
