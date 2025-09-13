@@ -599,15 +599,7 @@ pub(crate) fn new_session_info(
     event: SessionConfiguredEvent,
     is_first_event: bool,
 ) -> PlainHistoryCell {
-    let SessionConfiguredEvent {
-        model,
-        reasoning_effort: _,
-        session_id: _,
-        history_log_id: _,
-        history_entry_count: _,
-        initial_messages: _,
-        rollout_path: _,
-    } = event;
+    let SessionConfiguredEvent { model, .. } = event;
     if is_first_event {
         let cwd_str = match relativize_to_home(&config.cwd) {
             Some(rel) if !rel.as_os_str().is_empty() => {

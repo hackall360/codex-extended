@@ -129,6 +129,10 @@ pub struct Config {
     /// Settings that govern if and what will be written to `~/.codex/history.jsonl`.
     pub history: History,
 
+    /// When `false`, Codex will not persist session transcripts under
+    /// `~/.codex/sessions`. Defaults to `true`.
+    pub session_logging: bool,
+
     /// Optional URI-based file opener. If set, citations to files in the model
     /// output will be hyperlinked using the specified URI scheme.
     pub file_opener: UriBasedFileOpener,
@@ -566,6 +570,10 @@ pub struct ConfigToml {
     #[serde(default)]
     pub history: Option<History>,
 
+    /// When set to `false`, session transcripts will not be written to disk.
+    #[serde(default)]
+    pub session_logging: Option<bool>,
+
     /// Optional URI-based file opener. If set, citations to files in the model
     /// output will be hyperlinked using the specified URI scheme.
     pub file_opener: Option<UriBasedFileOpener>,
@@ -752,6 +760,7 @@ pub struct ConfigOverrides {
     pub include_view_image_tool: Option<bool>,
     pub show_raw_agent_reasoning: Option<bool>,
     pub tools_web_search_request: Option<bool>,
+    pub session_logging: Option<bool>,
 }
 
 impl Config {
@@ -779,6 +788,7 @@ impl Config {
             include_view_image_tool,
             show_raw_agent_reasoning,
             tools_web_search_request: override_tools_web_search_request,
+            session_logging: override_session_logging,
         } = overrides;
 
         let active_profile_name = config_profile_key
@@ -843,6 +853,10 @@ impl Config {
         };
 
         let history = cfg.history.unwrap_or_default();
+
+        let session_logging = override_session_logging
+            .or(cfg.session_logging)
+            .unwrap_or(true);
 
         let tools_web_search_request = override_tools_web_search_request
             .or(cfg.tools.as_ref().and_then(|t| t.web_search))
@@ -940,6 +954,7 @@ impl Config {
             project_doc_max_bytes: cfg.project_doc_max_bytes.unwrap_or(PROJECT_DOC_MAX_BYTES),
             codex_home,
             history,
+            session_logging,
             file_opener: cfg.file_opener.unwrap_or(UriBasedFileOpener::VsCode),
             codex_linux_sandbox_exe,
 
@@ -1472,6 +1487,7 @@ model_verbosity = "high"
                 project_doc_max_bytes: PROJECT_DOC_MAX_BYTES,
                 codex_home: fixture.codex_home(),
                 history: History::default(),
+                session_logging: true,
                 file_opener: UriBasedFileOpener::VsCode,
                 codex_linux_sandbox_exe: None,
                 hide_agent_reasoning: false,
@@ -1529,6 +1545,7 @@ model_verbosity = "high"
             project_doc_max_bytes: PROJECT_DOC_MAX_BYTES,
             codex_home: fixture.codex_home(),
             history: History::default(),
+            session_logging: true,
             file_opener: UriBasedFileOpener::VsCode,
             codex_linux_sandbox_exe: None,
             hide_agent_reasoning: false,
@@ -1601,6 +1618,7 @@ model_verbosity = "high"
             project_doc_max_bytes: PROJECT_DOC_MAX_BYTES,
             codex_home: fixture.codex_home(),
             history: History::default(),
+            session_logging: true,
             file_opener: UriBasedFileOpener::VsCode,
             codex_linux_sandbox_exe: None,
             hide_agent_reasoning: false,
@@ -1659,6 +1677,7 @@ model_verbosity = "high"
             project_doc_max_bytes: PROJECT_DOC_MAX_BYTES,
             codex_home: fixture.codex_home(),
             history: History::default(),
+            session_logging: true,
             file_opener: UriBasedFileOpener::VsCode,
             codex_linux_sandbox_exe: None,
             hide_agent_reasoning: false,

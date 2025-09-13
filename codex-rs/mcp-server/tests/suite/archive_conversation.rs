@@ -48,6 +48,7 @@ async fn archive_conversation_moves_rollout_into_archived_directory() {
         ..
     } = to_response::<NewConversationResponse>(new_response)
         .expect("deserialize newConversation response");
+    let rollout_path = rollout_path.expect("rollout path");
 
     assert!(
         rollout_path.exists(),

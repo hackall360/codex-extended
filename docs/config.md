@@ -521,6 +521,16 @@ To disable this behavior, configure `[history]` as follows:
 persistence = "none"  # "save-all" is the default value
 ```
 
+## session_logging
+
+Codex also records a detailed transcript for each session under
+`$CODEX_HOME/sessions`. Set `session_logging` to `false` to disable this
+feature:
+
+```toml
+session_logging = false  # defaults to true
+```
+
 ## file_opener
 
 Identifies the editor/URI scheme to use for hyperlinking citations in model output. If set, citations to files in the model output will be hyperlinked using the specified URI scheme so they can be ctrl/cmd-clicked from the terminal to open them.
@@ -621,6 +631,7 @@ Options that are specific to the TUI.
 | `profiles.<name>.*` | various | Profile‑scoped overrides of the same keys. |
 | `history.persistence` | `save-all` \| `none` | History file persistence (default: `save-all`). |
 | `history.max_bytes` | number | Currently ignored (not enforced). |
+| `session_logging` | boolean | Persist per-session transcripts (default: true). |
 | `file_opener` | `vscode` \| `vscode-insiders` \| `windsurf` \| `cursor` \| `none` | URI scheme for clickable citations (default: `vscode`). |
 | `tui` | table | TUI‑specific options (reserved). |
 | `hide_agent_reasoning` | boolean | Hide model reasoning events. |

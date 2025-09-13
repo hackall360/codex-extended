@@ -205,7 +205,7 @@ async fn summarize_context_three_requests_and_instructions() {
         session_configured,
         ..
     } = conversation_manager.new_conversation(config).await.unwrap();
-    let rollout_path = session_configured.rollout_path;
+    let rollout_path = session_configured.rollout_path.expect("rollout path");
 
     // 1) Normal user input – should hit server once.
     codex
@@ -582,7 +582,7 @@ async fn auto_compact_persists_rollout_entries() {
     codex.submit(Op::Shutdown).await.unwrap();
     wait_for_event(&codex, |ev| matches!(ev, EventMsg::ShutdownComplete)).await;
 
-    let rollout_path = session_configured.rollout_path;
+    let rollout_path = session_configured.rollout_path.expect("rollout path");
     let text = std::fs::read_to_string(&rollout_path).unwrap_or_else(|e| {
         panic!(
             "failed to read rollout file {}: {e}",
