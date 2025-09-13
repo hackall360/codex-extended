@@ -49,6 +49,7 @@ async fn run_stream(sse_body: &str) -> Vec<ResponseEvent> {
         stream_max_retries: Some(0),
         stream_idle_timeout_ms: Some(5_000),
         model_family: None,
+        tool_bridge: None,
         requires_openai_auth: false,
     };
 
