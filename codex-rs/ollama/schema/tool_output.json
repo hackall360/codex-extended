@@ -1,0 +1,25 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Ollama tool output",
+  "type": "object",
+  "required": ["type"],
+  "properties": {
+    "type": {
+      "type": "string",
+      "enum": ["tool", "message"]
+    },
+    "name": {"type": "string"},
+    "input": {},
+    "content": {"type": "string"}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"type": {"const": "tool"}}},
+      "then": {"required": ["name", "input"], "not": {"required": ["content"]}}
+    },
+    {
+      "if": {"properties": {"type": {"const": "message"}}},
+      "then": {"required": ["content"], "not": {"anyOf": [{"required": ["name"]}, {"required": ["input"]}]}}
+    }
+  ]
+}

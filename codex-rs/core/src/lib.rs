@@ -97,3 +97,5 @@ pub use codex_protocol::models::LocalShellStatus;
 pub use codex_protocol::models::ReasoningItemContent;
 pub use codex_protocol::models::ResponseItem;
 pub use tool_bridge::ToolBridge;
+pub use tool_bridge::create_tool_bridge;
+pub use tool_bridge::register_tool_bridge;
