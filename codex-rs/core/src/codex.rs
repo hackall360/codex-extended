@@ -1721,6 +1721,7 @@ async fn run_turn(
         input,
         tools,
         base_instructions_override: turn_context.base_instructions.clone(),
+        force_json_bridge: turn_context.client.force_json_bridge(),
     };
 
     let mut retries = 0;
