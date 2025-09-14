@@ -58,6 +58,7 @@ async fn run_request(input: Vec<ResponseItem>) -> Value {
         model_family: None,
         tool_bridge: None,
         supports_tools: true,
+        force_json_bridge: false,
         requires_openai_auth: false,
     };
 

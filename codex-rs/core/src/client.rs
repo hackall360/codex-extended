@@ -93,11 +93,13 @@ impl ModelClient {
             .tool_bridge
             .as_deref()
             .and_then(create_tooling_bridge);
-        if tool_bridge.is_none() {
-            let is_ollama = provider.name.to_ascii_lowercase().contains("ollama");
-            if is_ollama && !provider.supports_tools {
-                tool_bridge = create_tooling_bridge("ollama");
-            }
+        if tool_bridge.is_none()
+            && config
+                .model_provider_id
+                .to_ascii_lowercase()
+                .starts_with("ollama")
+        {
+            tool_bridge = create_tooling_bridge("ollama");
         }
 
         Self {
@@ -129,7 +131,25 @@ impl ModelClient {
     /// specialised helpers are private to avoid accidental misuse.
     pub async fn stream(&self, prompt: &Prompt) -> Result<ResponseStream> {
         let mut prompt = prompt.clone();
-        if let Some(bridge) = self.tool_bridge.as_ref() {
+
+        let bridge = if self.provider.force_json_bridge {
+            self.tool_bridge.clone().or_else(|| {
+                if self
+                    .config
+                    .model_provider_id
+                    .to_ascii_lowercase()
+                    .starts_with("ollama")
+                {
+                    create_tooling_bridge("ollama")
+                } else {
+                    None
+                }
+            })
+        } else {
+            self.tool_bridge.clone()
+        };
+
+        if let Some(bridge) = bridge.as_ref() {
             bridge.wrap_prompt(&mut prompt);
         }
 
@@ -172,7 +192,7 @@ impl ModelClient {
             }
         };
 
-        if let Some(bridge) = self.tool_bridge.clone() {
+        if let Some(bridge) = bridge {
             let (tx, rx) = mpsc::channel::<Result<ResponseEvent>>(16);
             tokio::spawn(async move {
                 use futures::StreamExt;
@@ -860,6 +880,7 @@ mod tests {
             model_family: None,
             tool_bridge: None,
             supports_tools: true,
+            force_json_bridge: false,
             requires_openai_auth: false,
         };
 
@@ -923,6 +944,7 @@ mod tests {
             model_family: None,
             tool_bridge: None,
             supports_tools: true,
+            force_json_bridge: false,
             requires_openai_auth: false,
         };
 
@@ -960,6 +982,7 @@ mod tests {
             model_family: None,
             tool_bridge: None,
             supports_tools: true,
+            force_json_bridge: false,
             requires_openai_auth: false,
         };
 
@@ -1068,6 +1091,7 @@ mod tests {
                 model_family: None,
                 tool_bridge: None,
                 supports_tools: true,
+                force_json_bridge: false,
                 requires_openai_auth: false,
             };
 

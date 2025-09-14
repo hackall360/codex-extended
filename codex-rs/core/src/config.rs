@@ -1417,6 +1417,7 @@ model_verbosity = "high"
             model_family: None,
             tool_bridge: None,
             supports_tools: true,
+            force_json_bridge: false,
             requires_openai_auth: false,
         };
         let model_provider_map = {

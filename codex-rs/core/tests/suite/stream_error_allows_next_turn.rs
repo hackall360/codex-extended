@@ -83,6 +83,7 @@ async fn continue_after_stream_error() {
         model_family: None,
         tool_bridge: None,
         supports_tools: true,
+        force_json_bridge: false,
         requires_openai_auth: false,
     };
 

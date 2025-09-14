@@ -90,6 +90,7 @@ async fn retries_on_early_close() {
         model_family: None,
         tool_bridge: None,
         supports_tools: true,
+        force_json_bridge: false,
         requires_openai_auth: false,
     };
 

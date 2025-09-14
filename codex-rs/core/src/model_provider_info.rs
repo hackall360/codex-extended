@@ -95,6 +95,13 @@ pub struct ModelProviderInfo {
     #[serde(default = "default_supports_tools")]
     pub supports_tools: bool,
 
+    /// Force routing prompts through a [`ToolingBridge`] even when the provider
+    /// advertises native tool support. When enabled, model responses are
+    /// expected to be JSON objects that the bridge converts into
+    /// [`ResponseEvent`]s.
+    #[serde(default)]
+    pub force_json_bridge: bool,
+
     /// Does this provider require an OpenAI API Key or ChatGPT login token? If true,
     /// user is presented with login screen on first run, and login preference and token/key
     /// are stored in auth.json. If false (which is the default), login screen is skipped,
@@ -303,6 +310,7 @@ pub fn built_in_model_providers() -> HashMap<String, ModelProviderInfo> {
                 model_family: None,
                 tool_bridge: None,
                 supports_tools: true,
+                force_json_bridge: false,
                 requires_openai_auth: true,
             },
         ),
@@ -363,6 +371,7 @@ pub fn create_oss_provider_with_base_url(base_url: &str) -> ModelProviderInfo {
         model_family: None,
         tool_bridge: None,
         supports_tools: true,
+        force_json_bridge: false,
         requires_openai_auth: false,
     }
 }
@@ -383,6 +392,7 @@ fn create_ollama_provider(name: &str, model_family: Option<&str>) -> ModelProvid
         model_family: model_family.map(|s| s.to_string()),
         tool_bridge: None,
         supports_tools: false,
+        force_json_bridge: false,
         requires_openai_auth: false,
     }
 }
@@ -413,6 +423,7 @@ base_url = "http://localhost:11434/v1"
             model_family: None,
             tool_bridge: None,
             supports_tools: true,
+            force_json_bridge: false,
             requires_openai_auth: false,
         };
 
@@ -445,6 +456,7 @@ query_params = { api-version = "2025-04-01-preview" }
             model_family: None,
             tool_bridge: None,
             supports_tools: true,
+            force_json_bridge: false,
             requires_openai_auth: false,
         };
 
@@ -480,6 +492,7 @@ env_http_headers = { "X-Example-Env-Header" = "EXAMPLE_ENV_VAR" }
             model_family: None,
             tool_bridge: None,
             supports_tools: true,
+            force_json_bridge: false,
             requires_openai_auth: false,
         };
 
