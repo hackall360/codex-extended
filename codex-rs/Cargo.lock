@@ -681,6 +681,7 @@ dependencies = [
  "chrono",
  "codex-apply-patch",
  "codex-mcp-client",
+ "codex-ollama",
  "codex-protocol",
  "core_test_support",
  "dirs",
