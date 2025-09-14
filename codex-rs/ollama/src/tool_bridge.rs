@@ -3,7 +3,8 @@ use codex_core::Prompt;
 use codex_core::ResponseEvent;
 use codex_core::ResponseItem;
 use codex_core::ToolBridge;
-use codex_core::error::{self, Result};
+use codex_core::error::Result;
+use codex_core::error::{self};
 use jsonschema::JSONSchema;
 use once_cell::sync::Lazy;
 use serde::Deserialize;
@@ -37,12 +38,21 @@ struct ToolMessage {
 
 impl OllamaToolBridge {
     fn parse_json(&self, text: &str) -> Result<ToolMessage> {
-        let value: Value = serde_json::from_str(text)?;
-        if let Err(errors) = TOOL_OUTPUT_SCHEMA.validate(&value) {
-            let msg = errors.map(|e| e.to_string()).collect::<Vec<_>>().join(", ");
-            return Err(error::CodexErr::Json(serde_json::Error::custom(msg)));
+        match serde_json::from_str::<Value>(text) {
+            Ok(value) => {
+                if let Err(errors) = TOOL_OUTPUT_SCHEMA.validate(&value) {
+                    let msg = errors.map(|e| e.to_string()).collect::<Vec<_>>().join(", ");
+                    return Err(error::CodexErr::Json(serde_json::Error::custom(msg)));
+                }
+                Ok(serde_json::from_value(value)?)
+            }
+            Err(_) => Ok(ToolMessage {
+                kind: "message".into(),
+                name: None,
+                input: None,
+                content: Some(text.to_string()),
+            }),
         }
-        Ok(serde_json::from_value(value)?)
     }
 }
 
@@ -95,9 +105,10 @@ impl ToolBridge for OllamaToolBridge {
                         };
                         Ok(vec![ResponseEvent::OutputItemDone(call)])
                     }
-                    _ => Err(error::CodexErr::Json(serde_json::Error::custom(
-                        "unknown type",
-                    ))),
+                    _ => Err(error::CodexErr::Json(serde_json::Error::custom(format!(
+                        "unknown type: {}",
+                        parsed.kind
+                    )))),
                 }
             }
             other => Ok(vec![other]),
@@ -120,7 +131,7 @@ mod tests {
     #[test]
     fn encode_prompt_prepends_system_message() {
         let mut prompt = Prompt::default();
-        OllamaToolBridge::default().encode_prompt(&mut prompt);
+        OllamaToolBridge.encode_prompt(&mut prompt);
         match &prompt.input[0] {
             ResponseItem::Message { role, content, .. } => {
                 assert_eq!(role, "system");
@@ -136,7 +147,7 @@ mod tests {
 
     #[test]
     fn decode_event_parses_message() {
-        let bridge = OllamaToolBridge::default();
+        let bridge = OllamaToolBridge;
         let item = ResponseItem::Message {
             id: None,
             role: "assistant".into(),
@@ -162,7 +173,7 @@ mod tests {
 
     #[test]
     fn decode_event_parses_tool() {
-        let bridge = OllamaToolBridge::default();
+        let bridge = OllamaToolBridge;
         let item = ResponseItem::Message {
             id: None,
             role: "assistant".into(),
@@ -184,19 +195,27 @@ mod tests {
     }
 
     #[test]
-    fn decode_event_invalid_json_errors() {
-        let bridge = OllamaToolBridge::default();
+    fn decode_event_wraps_plain_text() {
+        let bridge = OllamaToolBridge;
         let item = ResponseItem::Message {
             id: None,
             role: "assistant".into(),
             content: vec![ContentItem::OutputText {
-                text: "not json".into(),
+                text: "plain".into(),
             }],
         };
-        assert!(
-            bridge
-                .decode_event(ResponseEvent::OutputItemDone(item))
-                .is_err()
-        );
+        let events = bridge
+            .decode_event(ResponseEvent::OutputItemDone(item))
+            .expect("decode");
+        match &events[0] {
+            ResponseEvent::OutputItemDone(ResponseItem::Message { content, .. }) => {
+                if let ContentItem::OutputText { text } = &content[0] {
+                    assert_eq!(text, "plain");
+                } else {
+                    panic!("expected OutputText");
+                }
+            }
+            _ => panic!("expected message"),
+        }
     }
 }
