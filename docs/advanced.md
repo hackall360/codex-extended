@@ -120,9 +120,9 @@ assistant's reply.
 
 Bridges are pluggable. To add support for another provider:
 
-1. Implement the [`ToolBridge` trait](../codex-rs/core/src/tool_bridge.rs) with
-   custom `encode_prompt` and `decode_event` logic.
-2. Register it via `register_tool_bridge("provider-id", || ...)`.
+1. Implement the [`ToolingBridge` trait](../codex-rs/core/src/tool_bridge.rs) with
+   custom `wrap_prompt` and `parse_event` logic.
+2. Register it via `register_tooling_bridge("provider-id", || ...)`.
 3. In `config.toml`, set `model_providers.<id>.tool_bridge = "provider-id"` or
    enable `force_json_tool_bridge` to use the JSON bridge globally.
 
