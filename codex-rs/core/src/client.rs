@@ -126,6 +126,10 @@ impl ModelClient {
         })
     }
 
+    pub fn force_json_bridge(&self) -> bool {
+        self.config.force_json_bridge || self.provider.force_json_bridge
+    }
+
     /// Dispatches to either the Responses or Chat implementation depending on
     /// the provider config.  Public callers always invoke `stream()` – the
     /// specialised helpers are private to avoid accidental misuse.

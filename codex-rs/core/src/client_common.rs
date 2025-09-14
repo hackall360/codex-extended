@@ -2,6 +2,7 @@ use crate::error::Result;
 use crate::model_family::ModelFamily;
 use crate::openai_tools::OpenAiTool;
 use crate::protocol::TokenUsage;
+use crate::tool_bridge::TOOLING_SCHEMA;
 use codex_apply_patch::APPLY_PATCH_TOOL_INSTRUCTIONS;
 use codex_protocol::config_types::ReasoningEffort as ReasoningEffortConfig;
 use codex_protocol::config_types::ReasoningSummary as ReasoningSummaryConfig;
@@ -18,6 +19,7 @@ use tokio::sync::mpsc;
 /// The `instructions` field in the payload sent to a model should always start
 /// with this content.
 const BASE_INSTRUCTIONS: &str = include_str!("../prompt.md");
+const OLLAMA_BRIDGE_TEMPLATE: &str = include_str!("../templates/ollama_bridge.md");
 
 /// API request payload for a single model turn
 #[derive(Default, Debug, Clone)]
@@ -31,6 +33,8 @@ pub struct Prompt {
 
     /// Optional override for the built-in BASE_INSTRUCTIONS.
     pub base_instructions_override: Option<String>,
+
+    pub force_json_bridge: bool,
 }
 
 impl Prompt {
@@ -39,7 +43,7 @@ impl Prompt {
             .base_instructions_override
             .as_deref()
             .unwrap_or(BASE_INSTRUCTIONS);
-        let mut sections: Vec<&str> = vec![base];
+        let mut sections: Vec<Cow<'_, str>> = vec![Cow::Borrowed(base)];
 
         // When there are no custom instructions, add apply_patch_tool_instructions if either:
         // - the model needs special instructions (4.1), or
@@ -52,9 +56,21 @@ impl Prompt {
         if self.base_instructions_override.is_none()
             && (model.needs_special_apply_patch_instructions || !is_apply_patch_tool_present)
         {
-            sections.push(APPLY_PATCH_TOOL_INSTRUCTIONS);
+            sections.push(Cow::Borrowed(APPLY_PATCH_TOOL_INSTRUCTIONS));
         }
-        Cow::Owned(sections.join("\n"))
+
+        if self.force_json_bridge {
+            let bridge = OLLAMA_BRIDGE_TEMPLATE.replace("{schema}", TOOLING_SCHEMA);
+            sections.push(Cow::Owned(bridge));
+        }
+
+        Cow::Owned(
+            sections
+                .iter()
+                .map(|s| s.as_ref())
+                .collect::<Vec<_>>()
+                .join("\n"),
+        )
     }
 
     pub(crate) fn get_formatted_input(&self) -> Vec<ResponseItem> {
@@ -178,6 +194,19 @@ mod tests {
             ..Default::default()
         };
         let expected = format!("{BASE_INSTRUCTIONS}\n{APPLY_PATCH_TOOL_INSTRUCTIONS}");
+        let model_family = find_family_for_model("gpt-4.1").expect("known model slug");
+        let full = prompt.get_full_instructions(&model_family);
+        assert_eq!(full, expected);
+    }
+
+    #[test]
+    fn get_full_instructions_force_json_bridge() {
+        let prompt = Prompt {
+            force_json_bridge: true,
+            ..Default::default()
+        };
+        let bridge = OLLAMA_BRIDGE_TEMPLATE.replace("{schema}", TOOLING_SCHEMA);
+        let expected = format!("{BASE_INSTRUCTIONS}\n{APPLY_PATCH_TOOL_INSTRUCTIONS}\n{bridge}");
         let model_family = find_family_for_model("gpt-4.1").expect("known model slug");
         let full = prompt.get_full_instructions(&model_family);
         assert_eq!(full, expected);
