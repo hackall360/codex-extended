@@ -132,7 +132,7 @@ impl ModelClient {
     pub async fn stream(&self, prompt: &Prompt) -> Result<ResponseStream> {
         let mut prompt = prompt.clone();
 
-        let bridge = if self.provider.force_json_bridge {
+        let bridge = if self.config.force_json_bridge || self.provider.force_json_bridge {
             self.tool_bridge.clone().or_else(|| {
                 if self
                     .config
