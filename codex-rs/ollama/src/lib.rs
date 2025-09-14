@@ -1,19 +1,19 @@
 mod backend;
+mod bridge;
 mod client;
 mod parser;
 mod pull;
-mod tool_bridge;
 mod url;
 
 pub use backend::OllamaBackend;
+pub use bridge::OllamaToolBridge;
+pub use bridge::register_ollama_tool_bridge;
 pub use client::OllamaClient;
 use codex_core::config::Config;
 pub use pull::CliProgressReporter;
 pub use pull::PullEvent;
 pub use pull::PullProgressReporter;
 pub use pull::TuiProgressReporter;
-pub use tool_bridge::OllamaToolBridge;
-pub use tool_bridge::register_ollama_tool_bridge;
 
 /// Default OSS model to use when `--oss` is passed without an explicit `-m`.
 pub const DEFAULT_OSS_MODEL: &str = "gpt-oss:20b";
