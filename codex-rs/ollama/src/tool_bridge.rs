@@ -2,7 +2,8 @@ use codex_core::ContentItem;
 use codex_core::Prompt;
 use codex_core::ResponseEvent;
 use codex_core::ResponseItem;
-use codex_core::ToolBridge;
+use codex_core::TOOLING_SCHEMA;
+use codex_core::ToolingBridge;
 use codex_core::error::Result;
 use codex_core::error::{self};
 use jsonschema::JSONSchema;
@@ -16,11 +17,9 @@ use uuid::Uuid;
 #[derive(Debug, Default)]
 pub struct OllamaToolBridge;
 
-const SYSTEM_INSTRUCTIONS: &str = "Respond only with JSON following this schema:\n{\n  \"type\": \"tool\" | \"message\",\n  \"name\"?: string,\n  \"input\"?: any,\n  \"content\"?: string\n}\nDo not include any prose outside of the JSON.";
-
+#[expect(clippy::expect_used)]
 static TOOL_OUTPUT_SCHEMA: Lazy<JSONSchema> = Lazy::new(|| {
-    let schema_str = include_str!("../schema/tool_output.json");
-    let schema_json: Value = serde_json::from_str(schema_str).expect("schema json");
+    let schema_json: Value = serde_json::from_str(TOOLING_SCHEMA).expect("schema json");
     JSONSchema::compile(&schema_json).expect("compile schema")
 });
 
@@ -56,19 +55,21 @@ impl OllamaToolBridge {
     }
 }
 
-impl ToolBridge for OllamaToolBridge {
-    fn encode_prompt(&self, prompt: &mut Prompt) {
+impl ToolingBridge for OllamaToolBridge {
+    fn wrap_prompt(&self, prompt: &mut Prompt) {
         let sys = ResponseItem::Message {
             id: None,
             role: "system".into(),
             content: vec![ContentItem::InputText {
-                text: SYSTEM_INSTRUCTIONS.to_string(),
+                text: format!(
+                    "Respond only with JSON following this schema:\n{TOOLING_SCHEMA}\nDo not include any prose outside of the JSON.",
+                ),
             }],
         };
         prompt.input.insert(0, sys);
     }
 
-    fn decode_event(&self, event: ResponseEvent) -> Result<Vec<ResponseEvent>> {
+    fn parse_event(&self, event: ResponseEvent) -> Result<Vec<ResponseEvent>> {
         match event {
             ResponseEvent::OutputItemDone(ResponseItem::Message { role, content, .. })
                 if role == "assistant" =>
@@ -117,7 +118,7 @@ impl ToolBridge for OllamaToolBridge {
 }
 
 pub fn register_ollama_tool_bridge() {
-    codex_core::register_tool_bridge("ollama", || Arc::new(OllamaToolBridge::default()));
+    codex_core::register_tooling_bridge("ollama", || Arc::new(OllamaToolBridge));
 }
 
 #[cfg(test)]
@@ -129,9 +130,9 @@ mod tests {
     use pretty_assertions::assert_eq;
 
     #[test]
-    fn encode_prompt_prepends_system_message() {
+    fn wrap_prompt_prepends_system_message() {
         let mut prompt = Prompt::default();
-        OllamaToolBridge.encode_prompt(&mut prompt);
+        OllamaToolBridge.wrap_prompt(&mut prompt);
         match &prompt.input[0] {
             ResponseItem::Message { role, content, .. } => {
                 assert_eq!(role, "system");
@@ -146,7 +147,7 @@ mod tests {
     }
 
     #[test]
-    fn decode_event_parses_message() {
+    fn parse_event_parses_message() {
         let bridge = OllamaToolBridge;
         let item = ResponseItem::Message {
             id: None,
@@ -156,7 +157,7 @@ mod tests {
             }],
         };
         let events = bridge
-            .decode_event(ResponseEvent::OutputItemDone(item))
+            .parse_event(ResponseEvent::OutputItemDone(item))
             .expect("decode");
         assert_eq!(events.len(), 1);
         match &events[0] {
@@ -172,7 +173,7 @@ mod tests {
     }
 
     #[test]
-    fn decode_event_parses_tool() {
+    fn parse_event_parses_tool() {
         let bridge = OllamaToolBridge;
         let item = ResponseItem::Message {
             id: None,
@@ -182,7 +183,7 @@ mod tests {
             }],
         };
         let events = bridge
-            .decode_event(ResponseEvent::OutputItemDone(item))
+            .parse_event(ResponseEvent::OutputItemDone(item))
             .expect("decode");
         assert_eq!(events.len(), 1);
         match &events[0] {
@@ -195,7 +196,7 @@ mod tests {
     }
 
     #[test]
-    fn decode_event_wraps_plain_text() {
+    fn parse_event_wraps_plain_text() {
         let bridge = OllamaToolBridge;
         let item = ResponseItem::Message {
             id: None,
@@ -205,7 +206,7 @@ mod tests {
             }],
         };
         let events = bridge
-            .decode_event(ResponseEvent::OutputItemDone(item))
+            .parse_event(ResponseEvent::OutputItemDone(item))
             .expect("decode");
         match &events[0] {
             ResponseEvent::OutputItemDone(ResponseItem::Message { content, .. }) => {

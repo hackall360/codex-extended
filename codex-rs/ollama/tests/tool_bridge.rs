@@ -1,7 +1,7 @@
 use codex_core::ContentItem;
 use codex_core::ResponseEvent;
 use codex_core::ResponseItem;
-use codex_core::ToolBridge;
+use codex_core::ToolingBridge;
 use codex_ollama::OllamaToolBridge;
 use pretty_assertions::assert_eq;
 
@@ -16,7 +16,7 @@ fn falls_back_to_message_when_json_invalid() {
         }],
     };
     let events = bridge
-        .decode_event(ResponseEvent::OutputItemDone(item))
+        .parse_event(ResponseEvent::OutputItemDone(item))
         .expect("decode");
     match &events[0] {
         ResponseEvent::OutputItemDone(ResponseItem::Message { content, .. }) => {
@@ -43,7 +43,7 @@ fn invalid_schema_returns_error() {
     };
     assert!(
         bridge
-            .decode_event(ResponseEvent::OutputItemDone(item))
+            .parse_event(ResponseEvent::OutputItemDone(item))
             .is_err()
     );
 }
@@ -57,7 +57,7 @@ fn recovers_after_plain_text() {
         content: vec![ContentItem::OutputText { text: "hi".into() }],
     };
     let events = bridge
-        .decode_event(ResponseEvent::OutputItemDone(plain))
+        .parse_event(ResponseEvent::OutputItemDone(plain))
         .expect("decode plain");
     assert_eq!(events.len(), 1);
 
@@ -69,7 +69,7 @@ fn recovers_after_plain_text() {
         }],
     };
     let events = bridge
-        .decode_event(ResponseEvent::OutputItemDone(tool))
+        .parse_event(ResponseEvent::OutputItemDone(tool))
         .expect("decode tool");
     match &events[0] {
         ResponseEvent::OutputItemDone(ResponseItem::CustomToolCall { name, .. }) => {

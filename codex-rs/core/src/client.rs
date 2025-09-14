@@ -42,8 +42,8 @@ use crate::openai_model_info::get_model_info;
 use crate::openai_tools::create_tools_json_for_responses_api;
 use crate::protocol::TokenUsage;
 use crate::token_data::PlanType;
-use crate::tool_bridge::ToolBridge;
-use crate::tool_bridge::create_tool_bridge;
+use crate::tool_bridge::ToolingBridge;
+use crate::tool_bridge::create_tooling_bridge;
 use crate::util::backoff;
 use codex_protocol::config_types::ReasoningEffort as ReasoningEffortConfig;
 use codex_protocol::config_types::ReasoningSummary as ReasoningSummaryConfig;
@@ -76,7 +76,7 @@ pub struct ModelClient {
     conversation_id: ConversationId,
     effort: Option<ReasoningEffortConfig>,
     summary: ReasoningSummaryConfig,
-    tool_bridge: Option<Arc<dyn ToolBridge>>,
+    tool_bridge: Option<Arc<dyn ToolingBridge>>,
 }
 
 impl ModelClient {
@@ -89,11 +89,14 @@ impl ModelClient {
         conversation_id: ConversationId,
     ) -> Self {
         let client = create_client();
-        let mut tool_bridge = provider.tool_bridge.as_deref().and_then(create_tool_bridge);
+        let mut tool_bridge = provider
+            .tool_bridge
+            .as_deref()
+            .and_then(create_tooling_bridge);
         if tool_bridge.is_none() {
             let is_ollama = provider.name.to_ascii_lowercase().contains("ollama");
             if is_ollama && !provider.supports_tools {
-                tool_bridge = create_tool_bridge("ollama");
+                tool_bridge = create_tooling_bridge("ollama");
             }
         }
 
@@ -127,7 +130,7 @@ impl ModelClient {
     pub async fn stream(&self, prompt: &Prompt) -> Result<ResponseStream> {
         let mut prompt = prompt.clone();
         if let Some(bridge) = self.tool_bridge.as_ref() {
-            bridge.encode_prompt(&mut prompt);
+            bridge.wrap_prompt(&mut prompt);
         }
 
         let base_stream = match self.provider.wire_api {
@@ -176,7 +179,7 @@ impl ModelClient {
                 let mut stream = base_stream;
                 while let Some(ev) = stream.next().await {
                     match ev {
-                        Ok(event) => match bridge.decode_event(event) {
+                        Ok(event) => match bridge.parse_event(event) {
                             Ok(events) => {
                                 for e in events {
                                     if tx.send(Ok(e)).await.is_err() {
