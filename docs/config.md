@@ -573,7 +573,7 @@ Example:
 show_raw_agent_reasoning = true  # defaults to false
 ```
 
-## force_json_tool_bridge
+## force_json_bridge
 
 For models that only return plain text, Codex can force a JSON‑based tool
 bridge. When enabled, Codex injects a system message instructing the model to
@@ -585,7 +585,7 @@ assistant message. This is useful for providers like
 model = "llama3.1"
 model_provider = "ollama"
 
-force_json_tool_bridge = true
+force_json_bridge = true
 ```
 
 See the [Advanced guide](./advanced.md#json-tool-bridge) for details on the
@@ -655,7 +655,7 @@ Options that are specific to the TUI.
 | `tui`                                            | table                                                             | TUI‑specific options (reserved).                                                                                                    |
 | `hide_agent_reasoning`                           | boolean                                                           | Hide model reasoning events.                                                                                                        |
 | `show_raw_agent_reasoning`                       | boolean                                                           | Show raw reasoning (when available).                                                                                                |
-| `force_json_tool_bridge`                         | boolean                                                           | Force JSON tool bridge even if provider supports tools.                                                                             |
+| `force_json_bridge`                              | boolean                                                           | Force JSON tool bridge even if provider supports tools.                                                                             |
 | `model_reasoning_effort`                         | `minimal` \| `low` \| `medium` \| `high`                          | Responses API reasoning effort.                                                                                                     |
 | `model_reasoning_summary`                        | `auto` \| `concise` \| `detailed` \| `none`                       | Reasoning summaries.                                                                                                                |
 | `model_verbosity`                                | `low` \| `medium` \| `high`                                       | GPT‑5 text verbosity (Responses API).                                                                                               |

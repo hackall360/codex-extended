@@ -1,3 +1,4 @@
 model = "gpt-5"
+force_json_bridge = false
 
 # Consider setting [mcp_servers] here!

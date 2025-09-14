@@ -170,6 +170,10 @@ pub struct Config {
     /// model family's default preference.
     pub include_apply_patch_tool: bool,
 
+    /// Force routing prompts through a JSON tool bridge even when the provider
+    /// advertises native tool support.
+    pub force_json_bridge: bool,
+
     pub tools_web_search_request: bool,
 
     pub use_experimental_streamable_shell_tool: bool,
@@ -589,6 +593,10 @@ pub struct ConfigToml {
     /// Defaults to `false`.
     pub show_raw_agent_reasoning: Option<bool>,
 
+    /// Force routing prompts through a JSON tool bridge even when the provider
+    /// supports tools natively.
+    pub force_json_bridge: Option<bool>,
+
     pub model_reasoning_effort: Option<ReasoningEffort>,
     pub model_reasoning_summary: Option<ReasoningSummary>,
     /// Optional verbosity control for GPT-5 models (Responses API `text.verbosity`).
@@ -759,6 +767,7 @@ pub struct ConfigOverrides {
     pub include_apply_patch_tool: Option<bool>,
     pub include_view_image_tool: Option<bool>,
     pub show_raw_agent_reasoning: Option<bool>,
+    pub force_json_bridge: Option<bool>,
     pub tools_web_search_request: Option<bool>,
     pub session_logging: Option<bool>,
 }
@@ -787,6 +796,7 @@ impl Config {
             include_apply_patch_tool,
             include_view_image_tool,
             show_raw_agent_reasoning,
+            force_json_bridge: override_force_json_bridge,
             tools_web_search_request: override_tools_web_search_request,
             session_logging: override_session_logging,
         } = overrides;
@@ -865,6 +875,10 @@ impl Config {
         let include_view_image_tool = include_view_image_tool
             .or(cfg.tools.as_ref().and_then(|t| t.view_image))
             .unwrap_or(true);
+
+        let force_json_bridge = override_force_json_bridge
+            .or(cfg.force_json_bridge)
+            .unwrap_or(false);
 
         let model = model
             .or(config_profile.model)
@@ -979,6 +993,7 @@ impl Config {
             experimental_resume,
             include_plan_tool: include_plan_tool.unwrap_or(false),
             include_apply_patch_tool: include_apply_patch_tool.unwrap_or(false),
+            force_json_bridge,
             tools_web_search_request,
             use_experimental_streamable_shell_tool: cfg
                 .experimental_use_exec_command_tool
@@ -1503,6 +1518,7 @@ model_verbosity = "high"
                 base_instructions: None,
                 include_plan_tool: false,
                 include_apply_patch_tool: false,
+                force_json_bridge: false,
                 tools_web_search_request: false,
                 use_experimental_streamable_shell_tool: false,
                 use_experimental_unified_exec_tool: false,
@@ -1561,6 +1577,7 @@ model_verbosity = "high"
             base_instructions: None,
             include_plan_tool: false,
             include_apply_patch_tool: false,
+            force_json_bridge: false,
             tools_web_search_request: false,
             use_experimental_streamable_shell_tool: false,
             use_experimental_unified_exec_tool: false,
@@ -1634,6 +1651,7 @@ model_verbosity = "high"
             base_instructions: None,
             include_plan_tool: false,
             include_apply_patch_tool: false,
+            force_json_bridge: false,
             tools_web_search_request: false,
             use_experimental_streamable_shell_tool: false,
             use_experimental_unified_exec_tool: false,
@@ -1693,6 +1711,7 @@ model_verbosity = "high"
             base_instructions: None,
             include_plan_tool: false,
             include_apply_patch_tool: false,
+            force_json_bridge: false,
             tools_web_search_request: false,
             use_experimental_streamable_shell_tool: false,
             use_experimental_unified_exec_tool: false,

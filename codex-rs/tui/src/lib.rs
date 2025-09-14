@@ -133,6 +133,7 @@ pub async fn run_main(
         include_apply_patch_tool: None,
         include_view_image_tool: None,
         show_raw_agent_reasoning: cli.oss.then_some(true),
+        force_json_bridge: None,
         tools_web_search_request: cli.web_search.then_some(true),
         session_logging: None,
     };
