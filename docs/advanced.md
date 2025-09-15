@@ -127,3 +127,57 @@ Bridges are pluggable. To add support for another provider:
    enable `force_json_bridge` to use the JSON bridge globally.
 
 See the Ollama bridge (`codex-rs/ollama`) for a reference implementation.
+
+## Ollama bridging & forced JSON output
+
+Models served by [Ollama](https://ollama.com) typically return plain text and
+ignore OpenAI-style tool calls. To bridge this gap, Codex can force these models
+to emit a tiny JSON object describing either a tool invocation or a normal
+message.
+
+### Enabling `force_json_bridge`
+
+Set [`force_json_bridge`](./config.md#force_json_bridge) to `true` to inject the
+JSON instructions globally:
+
+```toml
+model_provider = "ollama"
+force_json_bridge = true
+```
+
+### Expected JSON schema
+
+Responses must be a single JSON object:
+
+```json
+{
+  "type": "tool" | "message",
+  "name"?: string,
+  "input"?: any,
+  "content"?: string
+}
+```
+
+Examples:
+
+```json
+{
+  "type": "tool",
+  "name": "write_file",
+  "input": { "path": "main.rs", "contents": "fn main() {}" }
+}
+```
+
+```json
+{ "type": "message", "content": "All set!" }
+```
+
+### Limitations
+
+- Some models may ignore the instruction and emit non-JSON text, causing the
+  bridge to fail.
+- Only a single message or tool call is supported per turn.
+
+For troubleshooting steps and test instructions, see the [FAQ](./faq.md) and the
+[Ollama bridge tests](../codex-rs/ollama/tests/tool_bridge.rs) (run with
+`cargo test -p codex-ollama`).
