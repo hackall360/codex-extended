@@ -26,6 +26,7 @@ use codex_core::protocol::TurnAbortReason;
 use codex_core::protocol::TurnDiffEvent;
 use codex_core::protocol::WebSearchBeginEvent;
 use codex_core::protocol::WebSearchEndEvent;
+use codex_protocol::models::ResponseItem;
 use codex_protocol::num_format::format_with_separators;
 use owo_colors::OwoColorize;
 use owo_colors::Style;
@@ -46,6 +47,7 @@ const MAX_OUTPUT_LINES_FOR_EXEC_TOOL_CALL: usize = 20;
 pub(crate) struct EventProcessorWithHumanOutput {
     call_id_to_command: HashMap<String, ExecCommandBegin>,
     call_id_to_patch: HashMap<String, PatchApplyBegin>,
+    bridged_calls: HashMap<String, String>,
 
     // To ensure that --color=never is respected, ANSI escapes _must_ be added
     // using .style() with one of these fields. If you need a new style, add a
@@ -76,11 +78,13 @@ impl EventProcessorWithHumanOutput {
     ) -> Self {
         let call_id_to_command = HashMap::new();
         let call_id_to_patch = HashMap::new();
+        let bridged_calls = HashMap::new();
 
         if with_ansi {
             Self {
                 call_id_to_command,
                 call_id_to_patch,
+                bridged_calls,
                 bold: Style::new().bold(),
                 italic: Style::new().italic(),
                 dimmed: Style::new().dimmed(),
@@ -99,6 +103,7 @@ impl EventProcessorWithHumanOutput {
             Self {
                 call_id_to_command,
                 call_id_to_patch,
+                bridged_calls,
                 bold: Style::new(),
                 italic: Style::new(),
                 dimmed: Style::new(),
@@ -135,6 +140,73 @@ macro_rules! ts_println {
         print!("{} ", formatted.style($self.dimmed));
         println!($($arg)*);
     }};
+}
+
+impl EventProcessorWithHumanOutput {
+    fn handle_response_item(&mut self, item: ResponseItem) {
+        match item {
+            ResponseItem::FunctionCall {
+                name,
+                arguments,
+                call_id,
+                ..
+            } => {
+                let call = format!("{name}({arguments})");
+                ts_println!(
+                    self,
+                    "{} {}",
+                    "tool".style(self.magenta),
+                    call.style(self.bold),
+                );
+                self.bridged_calls.insert(call_id, call);
+            }
+            ResponseItem::CustomToolCall {
+                name,
+                input,
+                call_id,
+                ..
+            } => {
+                let call = format!("{name}({input})");
+                ts_println!(
+                    self,
+                    "{} {}",
+                    "tool".style(self.magenta),
+                    call.style(self.bold),
+                );
+                self.bridged_calls.insert(call_id, call);
+            }
+            ResponseItem::FunctionCallOutput { call_id, output } => {
+                let call = self
+                    .bridged_calls
+                    .remove(&call_id)
+                    .unwrap_or_else(|| format!("tool('{call_id}')"));
+                let success = output.success.unwrap_or(true);
+                let status = if success { "succeeded" } else { "failed" };
+                let style = if success { self.green } else { self.red };
+                let title = format!("{call} {status}:");
+                ts_println!(self, "{}", title.style(style));
+                for line in output
+                    .content
+                    .lines()
+                    .take(MAX_OUTPUT_LINES_FOR_EXEC_TOOL_CALL)
+                {
+                    println!("{}", line.style(self.dimmed));
+                }
+            }
+            ResponseItem::CustomToolCallOutput { call_id, output } => {
+                let call = self
+                    .bridged_calls
+                    .remove(&call_id)
+                    .unwrap_or_else(|| format!("tool('{call_id}')"));
+                let title = format!("{call} succeeded:");
+                ts_println!(self, "{}", title.style(self.green));
+                for line in output.lines().take(MAX_OUTPUT_LINES_FOR_EXEC_TOOL_CALL) {
+                    println!("{}", line.style(self.dimmed));
+                }
+            }
+            _ => {}
+        }
+    }
 }
 
 impl EventProcessor for EventProcessorWithHumanOutput {
@@ -538,8 +610,11 @@ impl EventProcessor for EventProcessorWithHumanOutput {
                 ts_println!(self, "explanation: {explanation:?}");
                 ts_println!(self, "plan: {plan:?}");
             }
-            EventMsg::GetHistoryEntryResponse(_) => {
-                // Currently ignored in exec output.
+            EventMsg::GetHistoryEntryResponse(ev) => {
+                if let Some(entry) = ev.entry
+                    && let Ok(item) = serde_json::from_str::<ResponseItem>(&entry.text) {
+                        self.handle_response_item(item);
+                    }
             }
             EventMsg::McpListToolsResponse(_) => {
                 // Currently ignored in exec output.
