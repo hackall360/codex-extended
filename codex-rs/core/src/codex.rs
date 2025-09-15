@@ -473,6 +473,8 @@ impl Session {
             model_reasoning_summary,
             conversation_id,
         );
+        let provider_supports_tools = provider.supports_tools;
+        let force_json_bridge = client.force_json_bridge();
         let turn_context = TurnContext {
             client,
             tools_config: ToolsConfig::new(&ToolsConfigParams {
@@ -485,6 +487,8 @@ impl Session {
                 use_streamable_shell_tool: config.use_experimental_streamable_shell_tool,
                 include_view_image_tool: config.include_view_image_tool,
                 experimental_unified_exec_tool: config.use_experimental_unified_exec_tool,
+                provider_supports_tools,
+                force_json_bridge,
             }),
             user_instructions,
             base_instructions,
@@ -1162,6 +1166,7 @@ async fn submission_loop(
                     updated_config.model_context_window = Some(model_info.context_window);
                 }
 
+                let provider_supports_tools = provider.supports_tools;
                 let client = ModelClient::new(
                     Arc::new(updated_config),
                     auth_manager,
@@ -1170,6 +1175,7 @@ async fn submission_loop(
                     effective_summary,
                     sess.conversation_id,
                 );
+                let force_json_bridge = client.force_json_bridge();
 
                 let new_approval_policy = approval_policy.unwrap_or(prev.approval_policy);
                 let new_sandbox_policy = sandbox_policy
@@ -1187,6 +1193,8 @@ async fn submission_loop(
                     use_streamable_shell_tool: config.use_experimental_streamable_shell_tool,
                     include_view_image_tool: config.include_view_image_tool,
                     experimental_unified_exec_tool: config.use_experimental_unified_exec_tool,
+                    provider_supports_tools,
+                    force_json_bridge,
                 });
 
                 let new_turn_context = TurnContext {
@@ -1253,6 +1261,7 @@ async fn submission_loop(
 
                     // Build a new client with per‑turn reasoning settings.
                     // Reuse the same provider and session id; auth defaults to env/API key.
+                    let provider_supports_tools = provider.supports_tools;
                     let client = ModelClient::new(
                         Arc::new(per_turn_config),
                         auth_manager,
@@ -1261,6 +1270,7 @@ async fn submission_loop(
                         summary,
                         sess.conversation_id,
                     );
+                    let force_json_bridge = client.force_json_bridge();
 
                     let fresh_turn_context = TurnContext {
                         client,
@@ -1276,6 +1286,8 @@ async fn submission_loop(
                             include_view_image_tool: config.include_view_image_tool,
                             experimental_unified_exec_tool: config
                                 .use_experimental_unified_exec_tool,
+                            provider_supports_tools,
+                            force_json_bridge,
                         }),
                         user_instructions: turn_context.user_instructions.clone(),
                         base_instructions: turn_context.base_instructions.clone(),
