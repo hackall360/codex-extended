@@ -5,7 +5,7 @@ mod parser;
 mod pull;
 mod url;
 
-pub use backend::OllamaBackend;
+pub use backend::{ChatStreamEvent, OllamaBackend};
 pub use bridge::OllamaToolBridge;
 pub use bridge::register_ollama_tool_bridge;
 pub use client::OllamaClient;
