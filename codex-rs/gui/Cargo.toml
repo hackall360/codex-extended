@@ -20,3 +20,6 @@ clap = { version = "4", features = ["derive"] }
 codex-arg0 = { path = "../arg0" }
 codex-tui = { path = "../tui" }
 eframe = "0.27"
+
+[dev-dependencies]
+pretty_assertions = "1"
