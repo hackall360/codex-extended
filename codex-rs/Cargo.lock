@@ -1296,10 +1296,24 @@ version = "0.0.0"
 dependencies = [
  "anyhow",
  "clap",
+ "clap_complete",
  "codex-arg0",
+ "codex-chatgpt",
+ "codex-cli",
+ "codex-common",
+ "codex-core",
+ "codex-exec",
+ "codex-login",
+ "codex-mcp-server",
+ "codex-protocol",
+ "codex-protocol-ts",
  "codex-tui",
  "eframe",
  "pretty_assertions",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]
