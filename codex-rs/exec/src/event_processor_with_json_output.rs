@@ -5,6 +5,7 @@ use codex_core::config::Config;
 use codex_core::protocol::Event;
 use codex_core::protocol::EventMsg;
 use codex_core::protocol::TaskCompleteEvent;
+use codex_protocol::models::ResponseItem;
 use serde_json::json;
 
 use crate::event_processor::CodexStatus;
@@ -52,6 +53,14 @@ impl EventProcessor for EventProcessorWithJsonOutput {
                 CodexStatus::InitiateShutdown
             }
             EventMsg::ShutdownComplete => CodexStatus::Shutdown,
+            EventMsg::GetHistoryEntryResponse(ev) => {
+                if let Some(entry) = ev.entry
+                    && let Ok(item) = serde_json::from_str::<ResponseItem>(&entry.text)
+                        && let Ok(line) = serde_json::to_string(&item) {
+                            println!("{line}");
+                        }
+                CodexStatus::Running
+            }
             _ => {
                 if let Ok(line) = serde_json::to_string(&event) {
                     println!("{line}");
