@@ -71,6 +71,7 @@ pub(crate) struct ToolsConfig {
     pub web_search_request: bool,
     pub include_view_image_tool: bool,
     pub experimental_unified_exec_tool: bool,
+    pub supports_native_tools: bool,
 }
 
 pub(crate) struct ToolsConfigParams<'a> {
@@ -83,6 +84,8 @@ pub(crate) struct ToolsConfigParams<'a> {
     pub(crate) use_streamable_shell_tool: bool,
     pub(crate) include_view_image_tool: bool,
     pub(crate) experimental_unified_exec_tool: bool,
+    pub(crate) provider_supports_tools: bool,
+    pub(crate) force_json_bridge: bool,
 }
 
 impl ToolsConfig {
@@ -97,39 +100,59 @@ impl ToolsConfig {
             use_streamable_shell_tool,
             include_view_image_tool,
             experimental_unified_exec_tool,
+            provider_supports_tools,
+            force_json_bridge,
         } = params;
-        let mut shell_type = if *use_streamable_shell_tool {
+        let supports_native_tools = *provider_supports_tools && !*force_json_bridge;
+
+        let mut shell_type = if supports_native_tools && *use_streamable_shell_tool {
             ConfigShellToolType::StreamableShell
-        } else if model_family.uses_local_shell_tool {
+        } else if supports_native_tools && model_family.uses_local_shell_tool {
             ConfigShellToolType::LocalShell
         } else {
             ConfigShellToolType::DefaultShell
         };
-        if matches!(approval_policy, AskForApproval::OnRequest) && !use_streamable_shell_tool {
+        if supports_native_tools
+            && matches!(approval_policy, AskForApproval::OnRequest)
+            && !use_streamable_shell_tool
+        {
             shell_type = ConfigShellToolType::ShellWithRequest {
                 sandbox_policy: sandbox_policy.clone(),
             }
         }
 
-        let apply_patch_tool_type = match model_family.apply_patch_tool_type {
-            Some(ApplyPatchToolType::Freeform) => Some(ApplyPatchToolType::Freeform),
-            Some(ApplyPatchToolType::Function) => Some(ApplyPatchToolType::Function),
-            None => {
-                if *include_apply_patch_tool {
-                    Some(ApplyPatchToolType::Freeform)
-                } else {
-                    None
+        let apply_patch_tool_type = if supports_native_tools {
+            match model_family.apply_patch_tool_type {
+                Some(ApplyPatchToolType::Freeform) => Some(ApplyPatchToolType::Freeform),
+                Some(ApplyPatchToolType::Function) => Some(ApplyPatchToolType::Function),
+                None => {
+                    if *include_apply_patch_tool {
+                        Some(ApplyPatchToolType::Freeform)
+                    } else {
+                        None
+                    }
                 }
             }
+        } else {
+            None
         };
+
+        // When bridging is required we skip exposing tools entirely and let the
+        // bridge translate assistant JSON into tool traffic instead.
+        let plan_tool = supports_native_tools && *include_plan_tool;
+        let web_search_request = supports_native_tools && *include_web_search_request;
+        let include_view_image_tool = supports_native_tools && *include_view_image_tool;
+        let experimental_unified_exec_tool =
+            supports_native_tools && *experimental_unified_exec_tool;
 
         Self {
             shell_type,
-            plan_tool: *include_plan_tool,
+            plan_tool,
             apply_patch_tool_type,
-            web_search_request: *include_web_search_request,
-            include_view_image_tool: *include_view_image_tool,
-            experimental_unified_exec_tool: *experimental_unified_exec_tool,
+            web_search_request,
+            include_view_image_tool,
+            experimental_unified_exec_tool,
+            supports_native_tools,
         }
     }
 }
@@ -533,6 +556,13 @@ pub(crate) fn get_openai_tools(
 ) -> Vec<OpenAiTool> {
     let mut tools: Vec<OpenAiTool> = Vec::new();
 
+    if !config.supports_native_tools {
+        // When native tools are unavailable we rely on a JSON bridge to turn
+        // assistant output into tool calls, so there is nothing to register
+        // with the provider here.
+        return tools;
+    }
+
     if config.experimental_unified_exec_tool {
         tools.push(create_unified_exec_tool());
     } else {
@@ -644,6 +674,8 @@ mod tests {
             use_streamable_shell_tool: false,
             include_view_image_tool: true,
             experimental_unified_exec_tool: true,
+            provider_supports_tools: true,
+            force_json_bridge: false,
         });
         let tools = get_openai_tools(&config, Some(HashMap::new()));
 
@@ -666,6 +698,8 @@ mod tests {
             use_streamable_shell_tool: false,
             include_view_image_tool: true,
             experimental_unified_exec_tool: true,
+            provider_supports_tools: true,
+            force_json_bridge: false,
         });
         let tools = get_openai_tools(&config, Some(HashMap::new()));
 
@@ -688,6 +722,8 @@ mod tests {
             use_streamable_shell_tool: false,
             include_view_image_tool: true,
             experimental_unified_exec_tool: true,
+            provider_supports_tools: true,
+            force_json_bridge: false,
         });
         let tools = get_openai_tools(
             &config,
@@ -782,6 +818,27 @@ mod tests {
     }
 
     #[test]
+    fn test_get_openai_tools_skipped_when_bridge_forced() {
+        let model_family = find_family_for_model("o3").expect("o3 should be a valid model family");
+        let config = ToolsConfig::new(&ToolsConfigParams {
+            model_family: &model_family,
+            approval_policy: AskForApproval::Never,
+            sandbox_policy: SandboxPolicy::ReadOnly,
+            include_plan_tool: true,
+            include_apply_patch_tool: true,
+            include_web_search_request: true,
+            use_streamable_shell_tool: false,
+            include_view_image_tool: true,
+            experimental_unified_exec_tool: true,
+            provider_supports_tools: true,
+            force_json_bridge: true,
+        });
+
+        let tools = get_openai_tools(&config, Some(HashMap::new()));
+        assert!(tools.is_empty(), "tools should be omitted when bridging");
+    }
+
+    #[test]
     fn test_get_openai_tools_mcp_tools_sorted_by_name() {
         let model_family = find_family_for_model("o3").expect("o3 should be a valid model family");
         let config = ToolsConfig::new(&ToolsConfigParams {
@@ -794,6 +851,8 @@ mod tests {
             use_streamable_shell_tool: false,
             include_view_image_tool: true,
             experimental_unified_exec_tool: true,
+            provider_supports_tools: true,
+            force_json_bridge: false,
         });
 
         // Intentionally construct a map with keys that would sort alphabetically.
@@ -872,6 +931,8 @@ mod tests {
             use_streamable_shell_tool: false,
             include_view_image_tool: true,
             experimental_unified_exec_tool: true,
+            provider_supports_tools: true,
+            force_json_bridge: false,
         });
 
         let tools = get_openai_tools(
@@ -935,6 +996,8 @@ mod tests {
             use_streamable_shell_tool: false,
             include_view_image_tool: true,
             experimental_unified_exec_tool: true,
+            provider_supports_tools: true,
+            force_json_bridge: false,
         });
 
         let tools = get_openai_tools(
@@ -993,6 +1056,8 @@ mod tests {
             use_streamable_shell_tool: false,
             include_view_image_tool: true,
             experimental_unified_exec_tool: true,
+            provider_supports_tools: true,
+            force_json_bridge: false,
         });
 
         let tools = get_openai_tools(
@@ -1054,6 +1119,8 @@ mod tests {
             use_streamable_shell_tool: false,
             include_view_image_tool: true,
             experimental_unified_exec_tool: true,
+            provider_supports_tools: true,
+            force_json_bridge: false,
         });
 
         let tools = get_openai_tools(
