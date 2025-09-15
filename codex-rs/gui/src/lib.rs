@@ -11,6 +11,7 @@ use eframe::egui::ScrollArea;
 use eframe::egui::SidePanel;
 use eframe::egui::TopBottomPanel;
 use eframe::egui::{self};
+use std::mem;
 use std::path::PathBuf;
 
 /// Command line interface for the graphical Codex client.
@@ -50,6 +51,23 @@ struct CodexGui {
     notes: Vec<String>,
     messages: Vec<Message>,
     input: String,
+    new_session: String,
+    new_note: String,
+    prompt: String,
+}
+
+impl Default for CodexGui {
+    fn default() -> Self {
+        Self {
+            sessions: Vec::new(),
+            notes: Vec::new(),
+            messages: Vec::new(),
+            input: String::new(),
+            new_session: String::new(),
+            new_note: String::new(),
+            prompt: String::new(),
+        }
+    }
 }
 
 impl CodexGui {
@@ -72,6 +90,31 @@ impl CodexGui {
                 },
             ],
             input: String::new(),
+            new_session: String::new(),
+            new_note: String::new(),
+            prompt: "Make a calculator application in rust".into(),
+        }
+    }
+
+    fn add_session(&mut self) {
+        if !self.new_session.is_empty() {
+            self.sessions.push(mem::take(&mut self.new_session));
+        }
+    }
+
+    fn add_note(&mut self) {
+        if !self.new_note.is_empty() {
+            self.notes.push(mem::take(&mut self.new_note));
+        }
+    }
+
+    fn send_message(&mut self, color: Color32) {
+        if !self.input.is_empty() {
+            self.prompt = self.input.clone();
+            self.messages.push(Message {
+                text: mem::take(&mut self.input),
+                color,
+            });
         }
     }
 }
@@ -90,6 +133,13 @@ impl eframe::App for CodexGui {
                 for s in &self.sessions {
                     ui.label(s);
                 }
+                ui.add_space(8.0);
+                ui.horizontal(|ui| {
+                    ui.text_edit_singleline(&mut self.new_session);
+                    if ui.button("+").clicked() {
+                        self.add_session();
+                    }
+                });
             });
 
         SidePanel::right("notes").resizable(false).show(ctx, |ui| {
@@ -107,6 +157,13 @@ impl eframe::App for CodexGui {
             if let Some(i) = remove {
                 self.notes.remove(i);
             }
+            ui.add_space(8.0);
+            ui.horizontal(|ui| {
+                ui.text_edit_singleline(&mut self.new_note);
+                if ui.button("+").clicked() {
+                    self.add_note();
+                }
+            });
         });
 
         egui::CentralPanel::default().show(ctx, |ui| {
@@ -116,7 +173,7 @@ impl eframe::App for CodexGui {
                     .rounding(4.0)
                     .inner_margin(Margin::same(8.0))
                     .show(ui, |ui| {
-                        ui.label("Make a calculator application in rust");
+                        ui.label(&self.prompt);
                     });
             });
             ui.add_space(10.0);
@@ -137,13 +194,43 @@ impl eframe::App for CodexGui {
         TopBottomPanel::bottom("bottom").show(ctx, |ui| {
             ui.horizontal(|ui| {
                 ui.text_edit_singleline(&mut self.input);
-                ui.button("Explain this codebase").clicked();
-                ui.button("Ask").clicked();
-                ui.button("Code").clicked();
+                if ui.button("Explain this codebase").clicked() {
+                    self.send_message(Color32::from_rgb(139, 233, 253));
+                }
+                if ui.button("Ask").clicked() {
+                    self.send_message(Color32::from_rgb(189, 147, 249));
+                }
+                if ui.button("Code").clicked() {
+                    self.send_message(Color32::from_rgb(80, 250, 123));
+                }
                 ui.separator();
                 let _ = ui.button(RichText::new("🔴"));
                 let _ = ui.button(RichText::new("⏹"));
             });
         });
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pretty_assertions::assert_eq;
+
+    #[test]
+    fn add_session_appends() {
+        let mut gui = CodexGui::default();
+        gui.new_session = "S3".into();
+        gui.add_session();
+        assert_eq!(gui.sessions.len(), 3);
+        assert_eq!(gui.sessions[2], "S3");
+    }
+
+    #[test]
+    fn send_message_updates_state() {
+        let mut gui = CodexGui::default();
+        gui.input = "hi".into();
+        gui.send_message(Color32::from_rgb(1, 2, 3));
+        assert_eq!(gui.prompt, "hi");
+        assert_eq!(gui.messages.last().unwrap().text, "hi");
     }
 }

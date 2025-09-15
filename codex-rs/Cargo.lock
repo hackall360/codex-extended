@@ -1299,6 +1299,7 @@ dependencies = [
  "codex-arg0",
  "codex-tui",
  "eframe",
+ "pretty_assertions",
 ]
 
 [[package]]
