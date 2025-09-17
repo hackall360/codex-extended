@@ -181,6 +181,14 @@ pub(crate) async fn stream_chat_completions(
                 call_id,
                 ..
             } => {
+                // When forcing the JSON tooling bridge (e.g., Ollama compat),
+                // do NOT include native tool_calls in Chat Completions payloads.
+                // The provider may reject unknown tool types or missing tool
+                // definitions. The bridge will handle tool semantics purely
+                // via assistant text in the output direction.
+                if provider.force_json_bridge {
+                    continue;
+                }
                 let mut msg = json!({
                     "role": "assistant",
                     "content": null,
@@ -206,6 +214,9 @@ pub(crate) async fn stream_chat_completions(
                 status,
                 action,
             } => {
+                if provider.force_json_bridge {
+                    continue;
+                }
                 // Confirm with API team.
                 let mut msg = json!({
                     "role": "assistant",
@@ -225,6 +236,9 @@ pub(crate) async fn stream_chat_completions(
                 messages.push(msg);
             }
             ResponseItem::FunctionCallOutput { call_id, output } => {
+                if provider.force_json_bridge {
+                    continue;
+                }
                 messages.push(json!({
                     "role": "tool",
                     "tool_call_id": call_id,
@@ -238,6 +252,9 @@ pub(crate) async fn stream_chat_completions(
                 input,
                 status: _,
             } => {
+                if provider.force_json_bridge {
+                    continue;
+                }
                 messages.push(json!({
                     "role": "assistant",
                     "content": null,
@@ -252,6 +269,9 @@ pub(crate) async fn stream_chat_completions(
                 }));
             }
             ResponseItem::CustomToolCallOutput { call_id, output } => {
+                if provider.force_json_bridge {
+                    continue;
+                }
                 messages.push(json!({
                     "role": "tool",
                     "tool_call_id": call_id,
@@ -267,13 +287,43 @@ pub(crate) async fn stream_chat_completions(
         }
     }
 
-    let tools_json = create_tools_json_for_chat_completions_api(&prompt.tools)?;
-    let payload = json!({
+    // Only include native tool definitions when the provider supports tools
+    // and we are not forcing the JSON tooling bridge. For Ollama and other
+    // providers where we rely on the bridge, sending `tools` can lead to
+    // invalid tool call errors from the compat endpoint.
+    let mut payload = json!({
         "model": model_family.slug,
         "messages": messages,
         "stream": true,
-        "tools": tools_json,
     });
+    if provider.supports_tools && !provider.force_json_bridge {
+        let tools_json = create_tools_json_for_chat_completions_api(&prompt.tools)?;
+        if let Some(obj) = payload.as_object_mut() {
+            obj.insert("tools".to_string(), serde_json::Value::Array(tools_json));
+        }
+    }
+
+    // Ollama OpenAI-compatible endpoint supports core sampling params.
+    // Add conservative defaults to improve structured output reliability.
+    // We treat providers that enable `force_json_bridge` as candidates for these
+    // overrides (typically our built-in `ollama*` providers).
+    if provider.force_json_bridge
+        && let Some(obj) = payload.as_object_mut()
+    {
+        obj.insert("temperature".to_string(), json!(0.2));
+        obj.insert("top_p".to_string(), json!(0.9));
+        // Encourage deterministic output when supported
+        obj.insert("seed".to_string(), json!(7));
+        // Keep penalties neutral unless configured elsewhere
+        obj.insert("frequency_penalty".to_string(), json!(0));
+        obj.insert("presence_penalty".to_string(), json!(0));
+        // For Ollama's OpenAI-compatible API, hint that we expect strict JSON output.
+        // Many local models honor OpenAI's response_format { type = "json_object" }.
+        obj.insert(
+            "response_format".to_string(),
+            json!({ "type": "json_object" }),
+        );
+    }
 
     debug!(
         "POST to {}: {}",

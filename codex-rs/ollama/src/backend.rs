@@ -1,5 +1,10 @@
-use codex_core::error::{CodexErr, Result};
-use codex_core::{ContentItem, ResponseEvent, ResponseItem, TOOLING_SCHEMA, ToolingBridge};
+use codex_core::ContentItem;
+use codex_core::ResponseEvent;
+use codex_core::ResponseItem;
+use codex_core::TOOLING_SCHEMA;
+use codex_core::ToolingBridge;
+use codex_core::error::CodexErr;
+use codex_core::error::Result;
 use futures::StreamExt;
 use ollama_rs::Ollama;
 use ollama_rs::error::OllamaError;
@@ -17,7 +22,7 @@ pub struct OllamaBackend {
 }
 
 /// Events produced while streaming chat completions.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub enum ChatStreamEvent {
     /// A standard response event from the model.
     Response(ResponseEvent),
@@ -131,9 +136,7 @@ impl OllamaBackend {
                         '"' => in_string = true,
                         '{' => depth += 1,
                         '}' => {
-                            if depth > 0 {
-                                depth -= 1;
-                            }
+                            depth = depth.saturating_sub(1);
                             if depth == 0 {
                                 let text = std::mem::take(&mut json_buffer);
                                 let item = ResponseItem::Message {
@@ -166,14 +169,15 @@ impl OllamaBackend {
             if depth != 0 {
                 let msg = "incomplete JSON object".to_string();
                 on_event(ChatStreamEvent::Error(msg.clone()));
-                return Err(CodexErr::Json(serde_json::Error::custom(msg)));
+                let json_err = serde_json::Error::io(io::Error::other(msg));
+                return Err(CodexErr::Json(json_err));
             }
             if !json_buffer.trim().is_empty() {
                 let text = std::mem::take(&mut json_buffer);
                 let item = ResponseItem::Message {
                     id: None,
                     role: "assistant".into(),
-                    content: vec![ContentItem::OutputText { text: text.clone() }],
+                    content: vec![ContentItem::OutputText { text }],
                 };
                 if let Some(bridge) = &self.tool_bridge {
                     match bridge.parse_event(ResponseEvent::OutputItemDone(item)) {

@@ -49,9 +49,11 @@ async fn sends_json_prompt_and_parses_tool_call() {
     assert!(prompt.contains("Respond only with JSON"));
 
     match &events[0] {
-        ResponseEvent::OutputItemDone(ResponseItem::CustomToolCall { name, input, .. }) => {
+        ResponseEvent::OutputItemDone(ResponseItem::FunctionCall {
+            name, arguments, ..
+        }) => {
             assert_eq!(name, "t");
-            assert_eq!(input, "{}");
+            assert_eq!(arguments, "{}");
         }
         other => panic!("unexpected event: {other:?}"),
     }

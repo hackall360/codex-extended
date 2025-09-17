@@ -143,6 +143,14 @@ fn main() -> anyhow::Result<()> {
 }
 
 async fn cli_main(codex_linux_sandbox_exe: Option<PathBuf>) -> anyhow::Result<()> {
+    // Register the Ollama tooling bridge so any provider whose id starts with
+    // "ollama" can bridge JSON outputs into tool calls when using the CLI
+    // entrypoint (codex.exe) as well as the dedicated codex-exec binary.
+    #[allow(clippy::disallowed_methods)]
+    {
+        codex_ollama::register_ollama_tool_bridge();
+    }
+
     let cli = MultitoolCli::parse();
 
     match cli.subcommand {

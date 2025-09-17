@@ -193,6 +193,8 @@ jobs:
         run: cargo nextest run --all-features --no-fail-fast --target ${{ matrix.target }}
         env:
           RUST_BACKTRACE: 1
+          # Ensure tests never attempt live network / seatbelt behaviors.
+          CODEX_SANDBOX_NETWORK_DISABLED: 1
 
       # Fail the job if any of the previous steps failed.
       - name: verify all steps passed

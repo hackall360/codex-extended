@@ -1,0 +1,17 @@
+[package]
+name = "codex-ollama-tools"
+version = { workspace = true }
+edition = "2024"
+
+[[bin]]
+name = "codex-ollama-modelfile"
+path = "src/modelfile.rs"
+
+[lints]
+workspace = true
+
+[dependencies]
+anyhow = "1"
+clap = { version = "4", features = ["derive"] }
+thiserror = "1"
+

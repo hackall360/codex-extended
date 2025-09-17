@@ -15,6 +15,12 @@ struct TopCli {
 
 fn main() -> anyhow::Result<()> {
     arg0_dispatch_or_else(|codex_linux_sandbox_exe| async move {
+        // Register the Ollama tooling bridge so any provider whose id starts
+        // with "ollama" can bridge JSON outputs into tool calls.
+        #[allow(clippy::disallowed_methods)]
+        {
+            codex_ollama::register_ollama_tool_bridge();
+        }
         let top_cli = TopCli::parse();
         let mut inner = top_cli.inner;
         inner

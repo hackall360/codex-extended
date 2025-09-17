@@ -56,9 +56,10 @@ impl EventProcessor for EventProcessorWithJsonOutput {
             EventMsg::GetHistoryEntryResponse(ev) => {
                 if let Some(entry) = ev.entry
                     && let Ok(item) = serde_json::from_str::<ResponseItem>(&entry.text)
-                        && let Ok(line) = serde_json::to_string(&item) {
-                            println!("{line}");
-                        }
+                    && let Ok(line) = serde_json::to_string(&item)
+                {
+                    println!("{line}");
+                }
                 CodexStatus::Running
             }
             _ => {

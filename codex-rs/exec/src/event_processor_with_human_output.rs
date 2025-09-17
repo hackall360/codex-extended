@@ -612,9 +612,10 @@ impl EventProcessor for EventProcessorWithHumanOutput {
             }
             EventMsg::GetHistoryEntryResponse(ev) => {
                 if let Some(entry) = ev.entry
-                    && let Ok(item) = serde_json::from_str::<ResponseItem>(&entry.text) {
-                        self.handle_response_item(item);
-                    }
+                    && let Ok(item) = serde_json::from_str::<ResponseItem>(&entry.text)
+                {
+                    self.handle_response_item(item);
+                }
             }
             EventMsg::McpListToolsResponse(_) => {
                 // Currently ignored in exec output.

@@ -72,9 +72,9 @@ fn recovers_after_plain_text() {
         .parse_event(ResponseEvent::OutputItemDone(tool))
         .expect("decode tool");
     match &events[0] {
-        ResponseEvent::OutputItemDone(ResponseItem::CustomToolCall { name, .. }) => {
+        ResponseEvent::OutputItemDone(ResponseItem::FunctionCall { name, .. }) => {
             assert_eq!(name, "t");
         }
-        _ => panic!("expected tool call"),
+        _ => panic!("expected function call"),
     }
 }

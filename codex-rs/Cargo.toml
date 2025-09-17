@@ -15,6 +15,7 @@ members = [
     "mcp-server",
     "mcp-types",
     "ollama",
+    "ollama-tools",
     "protocol",
     "protocol-ts",
     "tui",

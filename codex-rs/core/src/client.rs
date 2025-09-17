@@ -47,6 +47,7 @@ use crate::tool_bridge::create_tooling_bridge;
 use crate::util::backoff;
 use codex_protocol::config_types::ReasoningEffort as ReasoningEffortConfig;
 use codex_protocol::config_types::ReasoningSummary as ReasoningSummaryConfig;
+use codex_protocol::models::ContentItem;
 use codex_protocol::models::ResponseItem;
 use std::sync::Arc;
 
@@ -197,30 +198,90 @@ impl ModelClient {
         };
 
         if let Some(bridge) = bridge {
+            // Capture context for optional Ollama native fallback when no tool call was produced.
+            let provider = self.provider.clone();
+            let config = self.config.clone();
+            let client = self.client.clone();
+            let prompt_for_fallback = prompt.clone();
+
             let (tx, rx) = mpsc::channel::<Result<ResponseEvent>>(16);
             tokio::spawn(async move {
                 use futures::StreamExt;
                 let mut stream = base_stream;
+                let mut saw_tool_call = false;
+                let mut completed_event: Option<ResponseEvent> = None;
+
                 while let Some(ev) = stream.next().await {
                     match ev {
-                        Ok(event) => match bridge.parse_event(event) {
-                            Ok(events) => {
-                                for e in events {
-                                    if tx.send(Ok(e)).await.is_err() {
-                                        return;
+                        Ok(event) => {
+                            if matches!(event, ResponseEvent::Completed { .. }) {
+                                completed_event = Some(event);
+                                break;
+                            }
+                            match bridge.parse_event(event) {
+                                Ok(events) => {
+                                    for e in events {
+                                        // Enforce one actionable tool call per turn. After the
+                                        // first tool call is observed, suppress subsequent tool
+                                        // calls in this turn to avoid duplicate executions.
+                                        let mut should_forward = true;
+                                        if let ResponseEvent::OutputItemDone(
+                                            ResponseItem::FunctionCall { .. }
+                                            | ResponseItem::LocalShellCall { .. }
+                                            | ResponseItem::CustomToolCall { .. },
+                                        ) = &e
+                                        {
+                                            if saw_tool_call {
+                                                should_forward = false;
+                                            } else {
+                                                saw_tool_call = true;
+                                            }
+                                        }
+                                        if should_forward && tx.send(Ok(e)).await.is_err() {
+                                            return;
+                                        }
                                     }
                                 }
+                                Err(err) => {
+                                    let _ = tx.send(Err(err)).await;
+                                    return;
+                                }
                             }
-                            Err(err) => {
-                                let _ = tx.send(Err(err)).await;
-                                return;
-                            }
-                        },
+                        }
                         Err(err) => {
                             let _ = tx.send(Err(err)).await;
                             return;
                         }
                     }
+                }
+
+                // Optional fallback for Ollama: if no tool call was produced, retry a one-shot
+                // native request with format=json to coerce structured output for this turn.
+                let is_ollama = config
+                    .model_provider_id
+                    .to_ascii_lowercase()
+                    .starts_with("ollama");
+                if !saw_tool_call
+                    && is_ollama
+                    && (config.force_json_bridge || provider.force_json_bridge)
+                    && let Err(_err) = try_ollama_native_fallback(
+                        &client,
+                        &provider,
+                        &config,
+                        &prompt_for_fallback,
+                        &tx,
+                        &*bridge,
+                    )
+                    .await
+                {
+                    // Swallow fallback errors to avoid failing otherwise
+                    // successful streams in tests/mocked environments.
+                    // The original aggregated events (including Completed)
+                    // will still be forwarded below.
+                }
+
+                if let Some(done) = completed_event {
+                    let _ = tx.send(Ok(done)).await;
                 }
             });
             Ok(ResponseStream { rx_event: rx })
@@ -451,6 +512,108 @@ impl ModelClient {
     }
 }
 
+/// Attempt a one-shot native Ollama fallback for providers that prefer forced JSON bridging.
+/// Posts to `/api/generate` with `format="json"` and a compact instruction block, then
+/// bridges the returned text into tool events.
+pub(crate) async fn try_ollama_native_fallback(
+    client: &reqwest::Client,
+    provider: &ModelProviderInfo,
+    config: &crate::config::Config,
+    prompt: &crate::client_common::Prompt,
+    tx: &mpsc::Sender<Result<ResponseEvent>>,
+    bridge: &dyn crate::tool_bridge::ToolingBridge,
+) -> crate::error::Result<()> {
+    use serde_json::json;
+
+    // Derive native base from provider.base_url (strip trailing "/v1").
+    let base = provider
+        .base_url
+        .clone()
+        .unwrap_or_else(|| "http://localhost:11434/v1".to_string());
+    let native_base = base.strip_suffix("/v1").unwrap_or(&base);
+    let url = format!("{native_base}/api/generate");
+
+    // Build instructions and user text.
+    let full_instructions = prompt.get_full_instructions(&config.model_family);
+    // Extract the last user text if present.
+    let mut user_text = String::new();
+    for item in prompt.get_formatted_input().iter().rev() {
+        if let ResponseItem::Message { role, content, .. } = item && role == "user" {
+            let mut buf = String::new();
+            for c in content {
+                match c {
+                    ContentItem::InputText { text } | ContentItem::OutputText { text } => {
+                        buf.push_str(text);
+                    }
+                    _ => {}
+                }
+            }
+            if !buf.trim().is_empty() {
+                user_text = buf;
+                break;
+            }
+        }
+    }
+
+    // For native /api/generate, prefer putting bridge instructions in `system` and the last
+    // user text in `prompt`.
+    let prompt_text = user_text;
+
+    let payload = json!({
+        "model": config.model,
+        "prompt": prompt_text,
+        "system": full_instructions,
+        "stream": false,
+        "format": "json",
+        "options": {
+            "temperature": 0.2,
+            "top_p": 0.9,
+            "seed": 7
+        }
+    });
+
+    let resp = client
+        .post(&url)
+        .json(&payload)
+        .send()
+        .await
+        .map_err(|e| crate::error::CodexErr::Stream(e.to_string(), None))?;
+    let status = resp.status();
+    let body = resp
+        .text()
+        .await
+        .map_err(|e| crate::error::CodexErr::Stream(e.to_string(), None))?;
+    if !status.is_success() {
+        return Err(crate::error::CodexErr::Stream(
+            format!("ollama fallback POST {status} failed: {body}"),
+            None,
+        ));
+    }
+    let value: serde_json::Value =
+        serde_json::from_str(&body).map_err(crate::error::CodexErr::Json)?;
+    let text = value
+        .get("response")
+        .and_then(|v| v.as_str())
+        .unwrap_or_default()
+        .to_string();
+
+    let item = ResponseItem::Message {
+        id: None,
+        role: "assistant".into(),
+        content: vec![ContentItem::OutputText { text }],
+    };
+    match bridge.parse_event(ResponseEvent::OutputItemDone(item)) {
+        Ok(events) => {
+            for e in events {
+                if tx.send(Ok(e)).await.is_err() {
+                    break;
+                }
+            }
+            Ok(())
+        }
+        Err(err) => Err(err),
+    }
+}
 #[derive(Debug, Deserialize, Serialize)]
 struct SseEvent {
     #[serde(rename = "type")]
