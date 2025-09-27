@@ -69,6 +69,34 @@ Codex CLI supports [MCP servers](./docs/advanced.md#model-context-protocol-mcp).
 
 Codex CLI supports a rich set of configuration options, with preferences stored in `~/.codex/config.toml`. For full configuration options, see [Configuration](./docs/config.md).
 
+### Using Codex with LM Studio
+
+Codex can run fully locally by delegating inference to [LM Studio](https://lmstudio.ai/).
+
+1. Launch LM Studio and enable the **Local Inference Server** (Preferences → Developer).
+2. Start any LM Studio model from the **My Models** tab. Codex looks for the model identifier exposed by the LM Studio server.
+3. Run Codex with the LM Studio backend:
+
+   ```shell
+   # Interactive session using the default LLaMA 3.1 8B Instruct model
+   codex --backend lmstudio
+
+   # Explicitly pick one of the supported architectures
+   codex --backend lmstudio --model qwen3
+   codex exec --backend lmstudio --model qwen3-moe "summarize this repo"
+   ```
+
+Codex understands the following architecture aliases when `--backend lmstudio` is selected:
+
+| Alias      | LM Studio model identifier                          |
+| ---------- | --------------------------------------------------- |
+| `llama`    | `meta-llama/Meta-Llama-3.1-8B-Instruct`              |
+| `qwen2`    | `Qwen/Qwen2-7B-Instruct`                            |
+| `qwen3`    | `Qwen/Qwen3-7B-Instruct`                            |
+| `qwen3-moe`| `Qwen/Qwen3-MoE-A2.7B-Instruct`                     |
+
+You can also pass the exact LM Studio identifier (for example `my-org/custom-model`) if you are running a different checkpoint. Codex verifies that the requested model is available from LM Studio and surfaces clear errors when it is not.
+
 ---
 
 ### Docs & FAQ

@@ -1,4 +1,10 @@
 #[cfg(feature = "cli")]
+mod backend_cli_arg;
+
+#[cfg(feature = "cli")]
+pub use backend_cli_arg::BackendCliArg;
+
+#[cfg(feature = "cli")]
 mod approval_mode_cli_arg;
 
 #[cfg(feature = "elapsed")]

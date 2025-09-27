@@ -1,5 +1,6 @@
 use clap::Parser;
 use codex_common::ApprovalModeCliArg;
+use codex_common::BackendCliArg;
 use codex_common::CliConfigOverrides;
 use std::path::PathBuf;
 
@@ -31,10 +32,14 @@ pub struct Cli {
     #[arg(long, short = 'm')]
     pub model: Option<String>,
 
+    /// Select the runtime backend Codex should connect to.
+    #[arg(long = "backend", value_enum, conflicts_with = "oss")]
+    pub backend: Option<BackendCliArg>,
+
     /// Convenience flag to select the local open source model provider.
     /// Equivalent to -c model_provider=oss; verifies a local Ollama server is
     /// running.
-    #[arg(long = "oss", default_value_t = false)]
+    #[arg(long = "oss", default_value_t = false, conflicts_with = "backend")]
     pub oss: bool,
 
     /// Configuration profile from config.toml to specify default options.

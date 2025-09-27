@@ -1,5 +1,6 @@
 use clap::Parser;
 use clap::ValueEnum;
+use codex_common::BackendCliArg;
 use codex_common::CliConfigOverrides;
 use std::path::PathBuf;
 
@@ -18,7 +19,11 @@ pub struct Cli {
     #[arg(long, short = 'm')]
     pub model: Option<String>,
 
-    #[arg(long = "oss", default_value_t = false)]
+    /// Select the runtime backend Codex should connect to.
+    #[arg(long = "backend", value_enum, conflicts_with = "oss")]
+    pub backend: Option<BackendCliArg>,
+
+    #[arg(long = "oss", default_value_t = false, conflicts_with = "backend")]
     pub oss: bool,
 
     /// Select the sandbox policy to use when executing model-generated shell

@@ -5,8 +5,8 @@
 #![deny(clippy::disallowed_methods)]
 use app::App;
 pub use app::AppExitInfo;
+use codex_common::BackendCliArg;
 use codex_core::AuthManager;
-use codex_core::BUILT_IN_OSS_MODEL_PROVIDER_ID;
 use codex_core::CodexAuth;
 use codex_core::RolloutRecorder;
 use codex_core::config::Config;
@@ -19,6 +19,7 @@ use codex_core::config::persist_model_selection;
 use codex_core::find_conversation_path_by_id_str;
 use codex_core::protocol::AskForApproval;
 use codex_core::protocol::SandboxPolicy;
+use codex_lmstudio::DEFAULT_LM_STUDIO_MODEL;
 use codex_ollama::DEFAULT_OSS_MODEL;
 use codex_protocol::config_types::SandboxMode;
 use codex_protocol::mcp_protocol::AuthMode;
@@ -111,22 +112,37 @@ pub async fn run_main(
         )
     };
 
-    // When using `--oss`, let the bootstrapper pick the model (defaulting to
-    // gpt-oss:20b) and ensure it is present locally. Also, force the built‑in
-    // `oss` model provider.
-    let model = if let Some(model) = &cli.model {
+    // Determine which backend to target and derive defaults accordingly.
+    let backend_choice = cli.backend.unwrap_or(if cli.oss {
+        BackendCliArg::Oss
+    } else {
+        BackendCliArg::Openai
+    });
+    let using_oss = backend_choice.is_oss();
+    let using_lmstudio = backend_choice.is_lmstudio();
+
+    let mut model = if let Some(model) = &cli.model {
         Some(model.clone())
-    } else if cli.oss {
+    } else if using_oss {
         Some(DEFAULT_OSS_MODEL.to_owned())
+    } else if using_lmstudio {
+        Some(DEFAULT_LM_STUDIO_MODEL.to_owned())
     } else {
         None // No model specified, will use the default.
     };
 
-    let model_provider_override = if cli.oss {
-        Some(BUILT_IN_OSS_MODEL_PROVIDER_ID.to_owned())
-    } else {
-        None
-    };
+    if using_lmstudio {
+        let resolved = match codex_lmstudio::resolve_model_identifier(model.as_deref()) {
+            Ok(model) => model,
+            Err(err) => {
+                eprintln!("{err}");
+                std::process::exit(1);
+            }
+        };
+        model = Some(resolved);
+    }
+
+    let model_provider_override = backend_choice.provider_key().map(str::to_owned);
 
     // canonicalize the cwd
     let cwd = cli.cwd.clone().map(|p| p.canonicalize().unwrap_or(p));
@@ -144,7 +160,7 @@ pub async fn run_main(
         include_plan_tool: Some(true),
         include_apply_patch_tool: None,
         include_view_image_tool: None,
-        show_raw_agent_reasoning: cli.oss.then_some(true),
+        show_raw_agent_reasoning: using_oss.then_some(true),
         tools_web_search_request: cli.web_search.then_some(true),
     };
     let raw_overrides = cli.config_overrides.raw_overrides.clone();
@@ -241,10 +257,16 @@ pub async fn run_main(
         .with_span_events(tracing_subscriber::fmt::format::FmtSpan::CLOSE)
         .with_filter(env_filter());
 
-    if cli.oss {
+    if using_oss {
         codex_ollama::ensure_oss_ready(&config)
             .await
             .map_err(|e| std::io::Error::other(format!("OSS setup failed: {e}")))?;
+    }
+
+    if using_lmstudio {
+        codex_lmstudio::ensure_lmstudio_ready(&config)
+            .await
+            .map_err(|e| std::io::Error::other(format!("LM Studio setup failed: {e}")))?;
     }
 
     let _ = tracing_subscriber::registry().with(file_layer).try_init();
@@ -540,13 +562,18 @@ fn should_show_model_rollout_prompt(
     gpt_5_codex_model_prompt_seen: bool,
 ) -> bool {
     let login_status = get_login_status(config);
+    let backend_choice = cli.backend.unwrap_or(if cli.oss {
+        BackendCliArg::Oss
+    } else {
+        BackendCliArg::Openai
+    });
 
     active_profile.is_none()
         && cli.model.is_none()
         && !gpt_5_codex_model_prompt_seen
         && config.model_provider.requires_openai_auth
         && matches!(login_status, LoginStatus::AuthMode(AuthMode::ChatGPT))
-        && !cli.oss
+        && !backend_choice.is_local()
 }
 
 #[cfg(test)]
