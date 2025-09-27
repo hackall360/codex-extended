@@ -15,7 +15,8 @@ pub struct Cli {
     #[arg(long = "image", short = 'i', value_name = "FILE", value_delimiter = ',', num_args = 1..)]
     pub images: Vec<PathBuf>,
 
-    /// Model the agent should use.
+    /// Model the agent should use. For LM Studio backends, pass architecture aliases such as
+    /// `llama`, `qwen2`, `qwen3`, or `qwen3-moe`.
     #[arg(long, short = 'm')]
     pub model: Option<String>,
 
@@ -56,10 +57,6 @@ pub struct Cli {
     /// Allow running Codex outside a Git repository.
     #[arg(long = "skip-git-repo-check", default_value_t = false)]
     pub skip_git_repo_check: bool,
-
-    /// Path to a JSON Schema file describing the model's final response shape.
-    #[arg(long = "output-schema", value_name = "FILE")]
-    pub output_schema: Option<PathBuf>,
 
     #[clap(skip)]
     pub config_overrides: CliConfigOverrides,

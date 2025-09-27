@@ -11,13 +11,18 @@ use wiremock::http::Method;
 use wiremock::matchers::method;
 use wiremock::matchers::path;
 
+use codex_lmstudio::DEFAULT_LM_STUDIO_MODEL;
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn exec_resolves_lmstudio_model_aliases() -> anyhow::Result<()> {
     let cases = [
-        ("llama", "meta-llama/Meta-Llama-3.1-8B-Instruct"),
-        ("qwen2", "Qwen/Qwen2-7B-Instruct"),
-        ("qwen3", "Qwen/Qwen3-7B-Instruct"),
-        ("qwen3-moe", "Qwen/Qwen3-MoE-A2.7B-Instruct"),
+        ("llama", DEFAULT_LM_STUDIO_MODEL),
+        ("devstral", DEFAULT_LM_STUDIO_MODEL),
+        ("qwen2", "qwen/qwen2.5-coder-14b"),
+        ("qwen3", "qwen/qwen3-4b-2507"),
+        ("qwen3-moe", "qwen/qwen3-coder-30b"),
+        ("qwen3moe", "qwen/qwen3-coder-30b"),
+        ("qwen3-moe-a3b", "qwen/qwen3-30b-a3b-2507"),
     ];
 
     for (alias, expected_model) in cases {

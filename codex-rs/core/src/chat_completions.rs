@@ -14,6 +14,7 @@ use tokio::sync::mpsc;
 use tokio::time::timeout;
 use tracing::debug;
 use tracing::trace;
+use uuid::Uuid;
 
 use crate::ModelProviderInfo;
 use crate::client_common::Prompt;
@@ -23,6 +24,7 @@ use crate::error::CodexErr;
 use crate::error::Result;
 use crate::model_family::ModelFamily;
 use crate::openai_tools::create_tools_json_for_chat_completions_api;
+use crate::openai_tools::sanitize_json_schema;
 use crate::util::backoff;
 use codex_protocol::models::ContentItem;
 use codex_protocol::models::ReasoningItemContent;
@@ -35,12 +37,6 @@ pub(crate) async fn stream_chat_completions(
     client: &reqwest::Client,
     provider: &ModelProviderInfo,
 ) -> Result<ResponseStream> {
-    if prompt.output_schema.is_some() {
-        return Err(CodexErr::UnsupportedOperation(
-            "output_schema is not supported for Chat Completions API".to_string(),
-        ));
-    }
-
     // Build messages array
     let mut messages = Vec::<serde_json::Value>::new();
 
@@ -274,12 +270,30 @@ pub(crate) async fn stream_chat_completions(
     }
 
     let tools_json = create_tools_json_for_chat_completions_api(&prompt.tools)?;
-    let payload = json!({
+    let mut payload = json!({
         "model": model_family.slug,
         "messages": messages,
         "stream": true,
         "tools": tools_json,
     });
+
+    if let Some(schema) = &prompt.output_schema
+        && let Some(obj) = payload.as_object_mut()
+    {
+        let mut sanitized_schema = schema.clone();
+        sanitize_json_schema(&mut sanitized_schema);
+        obj.insert(
+            "response_format".to_string(),
+            json!({
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "codex_output_schema",
+                    "schema": sanitized_schema,
+                    "strict": true,
+                }
+            }),
+        );
+    }
 
     debug!(
         "POST to {}: {}",
@@ -367,6 +381,14 @@ async fn process_chat_sse<S>(
         arguments: String,
         call_id: Option<String>,
         active: bool,
+    }
+
+    impl FunctionCallState {
+        fn ensure_call_id(&mut self) -> String {
+            self.call_id
+                .get_or_insert_with(|| format!("tool_call_{}", Uuid::new_v4()))
+                .clone()
+        }
     }
 
     let mut fn_call_state = FunctionCallState::default();
@@ -534,6 +556,8 @@ async fn process_chat_sse<S>(
                 // Extract call_id if present.
                 if let Some(id) = tool_call.get("id").and_then(|v| v.as_str()) {
                     fn_call_state.call_id.get_or_insert_with(|| id.to_string());
+                } else if fn_call_state.call_id.is_none() {
+                    fn_call_state.ensure_call_id();
                 }
 
                 // Extract function details if present.
@@ -572,7 +596,7 @@ async fn process_chat_sse<S>(
                             id: None,
                             name: fn_call_state.name.clone().unwrap_or_else(|| "".to_string()),
                             arguments: fn_call_state.arguments.clone(),
-                            call_id: fn_call_state.call_id.clone().unwrap_or_else(String::new),
+                            call_id: fn_call_state.ensure_call_id(),
                         };
 
                         let _ = tx_event.send(Ok(ResponseEvent::OutputItemDone(item))).await;
@@ -620,6 +644,55 @@ async fn process_chat_sse<S>(
                 return; // End processing for this SSE stream.
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use bytes::Bytes;
+    use futures::stream;
+    use tokio::time::Duration;
+
+    use crate::error::CodexErr;
+
+    #[tokio::test]
+    async fn generates_tool_call_id_when_missing() {
+        let chunks = vec![
+            Ok::<Bytes, CodexErr>(Bytes::from_static(
+                b"data: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"type\":\"function\",\"function\":{\"name\":\"shell\",\"arguments\":\"{\\\"command\\\":[\\\"echo\\\"],\\\"timeout_ms\\\":1000}\"}}]}}]}\n\n",
+            )),
+            Ok::<Bytes, CodexErr>(Bytes::from_static(
+                b"data: {\"choices\":[{\"finish_reason\":\"tool_calls\"}]}\n\n",
+            )),
+        ];
+
+        let stream = stream::iter(chunks);
+        let (tx, mut rx) = mpsc::channel(8);
+        let handle = tokio::spawn(async move {
+            process_chat_sse(stream, tx, Duration::from_secs(5)).await;
+        });
+
+        let mut observed_call_id: Option<String> = None;
+        while let Some(event) = rx.recv().await {
+            match event.expect("stream event") {
+                ResponseEvent::OutputItemDone(ResponseItem::FunctionCall { call_id, .. }) => {
+                    observed_call_id = Some(call_id);
+                }
+                ResponseEvent::Completed { .. } => break,
+                _ => {}
+            }
+        }
+
+        handle.await.expect("process_chat_sse task");
+
+        let call_id = observed_call_id.expect("missing tool call");
+        assert!(!call_id.is_empty(), "call_id should not be empty");
+        assert!(
+            call_id.starts_with("tool_call_"),
+            "unexpected fallback call_id prefix: {}",
+            call_id
+        );
     }
 }
 

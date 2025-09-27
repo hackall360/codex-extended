@@ -4,6 +4,7 @@ mod event_processor_with_human_output;
 pub mod event_processor_with_json_output;
 pub mod exec_events;
 pub mod experimental_event_processor_with_json_output;
+mod output_schema;
 
 use std::io::IsTerminal;
 use std::io::Read;
@@ -28,7 +29,6 @@ use codex_ollama::DEFAULT_OSS_MODEL;
 use codex_protocol::config_types::SandboxMode;
 use event_processor_with_human_output::EventProcessorWithHumanOutput;
 use experimental_event_processor_with_json_output::ExperimentalEventProcessorWithJsonOutput;
-use serde_json::Value;
 use tracing::debug;
 use tracing::error;
 use tracing::info;
@@ -58,7 +58,6 @@ pub async fn run_main(cli: Cli, codex_linux_sandbox_exe: Option<PathBuf>) -> any
         experimental_json,
         sandbox_mode: sandbox_mode_cli_arg,
         prompt,
-        output_schema: output_schema_path,
         include_plan_tool,
         config_overrides,
     } = cli;
@@ -105,8 +104,6 @@ pub async fn run_main(cli: Cli, codex_linux_sandbox_exe: Option<PathBuf>) -> any
         }
     };
 
-    let output_schema = load_output_schema(output_schema_path);
-
     let (stdout_with_ansi, stderr_with_ansi) = match color {
         cli::Color::Always => (true, true),
         cli::Color::Never => (false, false),
@@ -146,6 +143,12 @@ pub async fn run_main(cli: Cli, codex_linux_sandbox_exe: Option<PathBuf>) -> any
     });
     let using_oss = backend_choice.is_oss();
     let using_lmstudio = backend_choice.is_lmstudio();
+
+    let output_schema = if using_lmstudio {
+        Some(output_schema::default_lmstudio_schema())
+    } else {
+        None
+    };
 
     let mut model = if let Some(model) = model_cli_arg {
         Some(model)
@@ -396,31 +399,5 @@ async fn resolve_resume_path(
         Ok(path)
     } else {
         Ok(None)
-    }
-}
-
-fn load_output_schema(path: Option<PathBuf>) -> Option<Value> {
-    let path = path?;
-
-    let schema_str = match std::fs::read_to_string(&path) {
-        Ok(contents) => contents,
-        Err(err) => {
-            eprintln!(
-                "Failed to read output schema file {}: {err}",
-                path.display()
-            );
-            std::process::exit(1);
-        }
-    };
-
-    match serde_json::from_str::<Value>(&schema_str) {
-        Ok(value) => Some(value),
-        Err(err) => {
-            eprintln!(
-                "Output schema file {} is not valid JSON: {err}",
-                path.display()
-            );
-            std::process::exit(1);
-        }
     }
 }

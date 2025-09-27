@@ -6,7 +6,7 @@ use std::io;
 use std::time::Duration;
 
 /// Default LM Studio model used when `--backend lmstudio` is specified without `--model`.
-pub const DEFAULT_LM_STUDIO_MODEL: &str = "meta-llama/Meta-Llama-3.1-8B-Instruct";
+pub const DEFAULT_LM_STUDIO_MODEL: &str = "mistralai/devstral-small-2507";
 
 const LM_STUDIO_CONNECTION_ERROR: &str = "No running LM Studio server detected. Launch LM Studio and enable the local inference server (Preferences → Developer → Enable local server).";
 
@@ -21,16 +21,42 @@ const MODEL_ALIAS_TABLE: &[(&str, &str)] = &[
     ("llama-31", DEFAULT_LM_STUDIO_MODEL),
     ("llama-3.1", DEFAULT_LM_STUDIO_MODEL),
     ("llama3-8b", DEFAULT_LM_STUDIO_MODEL),
-    ("qwen2", "Qwen/Qwen2-7B-Instruct"),
-    ("qwen-2", "Qwen/Qwen2-7B-Instruct"),
-    ("qwen2-7b", "Qwen/Qwen2-7B-Instruct"),
-    ("qwen3", "Qwen/Qwen3-7B-Instruct"),
-    ("qwen-3", "Qwen/Qwen3-7B-Instruct"),
-    ("qwen3-7b", "Qwen/Qwen3-7B-Instruct"),
-    ("qwen3-moe", "Qwen/Qwen3-MoE-A2.7B-Instruct"),
-    ("qwen3_moe", "Qwen/Qwen3-MoE-A2.7B-Instruct"),
-    ("qwen-3-moe", "Qwen/Qwen3-MoE-A2.7B-Instruct"),
+    ("devstral", DEFAULT_LM_STUDIO_MODEL),
+    ("devstral-small", DEFAULT_LM_STUDIO_MODEL),
+    ("devstral-small-2507", DEFAULT_LM_STUDIO_MODEL),
+    ("qwen2", "qwen/qwen2.5-coder-14b"),
+    ("qwen2-5", "qwen/qwen2.5-coder-14b"),
+    ("qwen2.5", "qwen/qwen2.5-coder-14b"),
+    ("qwen-2", "qwen/qwen2.5-coder-14b"),
+    ("qwen2-14b", "qwen/qwen2.5-coder-14b"),
+    ("qwen3", "qwen/qwen3-4b-2507"),
+    ("qwen-3", "qwen/qwen3-4b-2507"),
+    ("qwen3-4b", "qwen/qwen3-4b-2507"),
+    ("qwen3-moe", "qwen/qwen3-coder-30b"),
+    ("qwen3moe", "qwen/qwen3-coder-30b"),
+    ("qwen3_moe", "qwen/qwen3-coder-30b"),
+    ("qwen-3-moe", "qwen/qwen3-coder-30b"),
+    ("qwen3-coder", "qwen/qwen3-coder-30b"),
+    ("qwen3-30b", "qwen/qwen3-coder-30b"),
+    ("qwen3-moe-a3b", "qwen/qwen3-30b-a3b-2507"),
+    ("qwen3-moe-a3b-2507", "qwen/qwen3-30b-a3b-2507"),
+    ("qwen3-30b-a3b", "qwen/qwen3-30b-a3b-2507"),
 ];
+
+const MODEL_ALIAS_HINTS: &[(&str, &str)] = &[
+    ("llama", DEFAULT_LM_STUDIO_MODEL),
+    ("qwen2", "qwen/qwen2.5-coder-14b"),
+    ("qwen3", "qwen/qwen3-4b-2507"),
+    ("qwen3-moe", "qwen/qwen3-coder-30b"),
+];
+
+fn alias_examples() -> String {
+    MODEL_ALIAS_HINTS
+        .iter()
+        .map(|(alias, model)| format!("{alias} → {model}"))
+        .collect::<Vec<_>>()
+        .join(", ")
+}
 
 /// Error returned when a provided LM Studio model alias cannot be resolved.
 #[derive(Debug, Clone)]
@@ -51,15 +77,17 @@ impl std::fmt::Display for UnsupportedModelAliasError {
         if self.alias.trim().is_empty() {
             write!(
                 f,
-                "LM Studio model name cannot be empty. Supported architectures: {}. You can also pass a full LM Studio model identifier (for example `namespace/model-name`).",
-                SUPPORTED_ARCHITECTURES.join(", ")
+                "LM Studio model name cannot be empty. Supported architectures: {}. Try one of the aliases ({}), or pass a full LM Studio model identifier (for example `namespace/model-name`).",
+                SUPPORTED_ARCHITECTURES.join(", "),
+                alias_examples()
             )
         } else {
             write!(
                 f,
-                "Unsupported LM Studio model alias `{}`. Supported architectures: {}. Provide one of the aliases or the full model identifier as shown in LM Studio.",
+                "Unsupported LM Studio model alias `{}`. Supported architectures: {}. Try one of the aliases ({}), or provide the full model identifier as shown in LM Studio.",
                 self.alias,
-                SUPPORTED_ARCHITECTURES.join(", ")
+                SUPPORTED_ARCHITECTURES.join(", "),
+                alias_examples()
             )
         }
     }
@@ -111,10 +139,7 @@ pub async fn ensure_lmstudio_ready(config: &Config) -> io::Result<()> {
         .ok_or_else(|| {
             io::Error::new(
                 io::ErrorKind::NotFound,
-                format!(
-                    "Built-in provider `{}` not found",
-                    BUILT_IN_LM_STUDIO_MODEL_PROVIDER_ID
-                ),
+                format!("Built-in provider `{BUILT_IN_LM_STUDIO_MODEL_PROVIDER_ID}` not found"),
             )
         })?;
 
@@ -191,22 +216,20 @@ fn model_available(payload: &JsonValue, target_model: &str) -> bool {
             .unwrap_or(false)
     }
 
-    if let Some(entries) = payload.get("data").and_then(|v| v.as_array()) {
-        if entries
+    if let Some(entries) = payload.get("data").and_then(|v| v.as_array())
+        && entries
             .iter()
             .any(|entry| matches_entry(entry, target_model))
-        {
-            return true;
-        }
+    {
+        return true;
     }
 
-    if let Some(entries) = payload.get("models").and_then(|v| v.as_array()) {
-        if entries
+    if let Some(entries) = payload.get("models").and_then(|v| v.as_array())
+        && entries
             .iter()
             .any(|entry| matches_entry(entry, target_model))
-        {
-            return true;
-        }
+    {
+        return true;
     }
 
     false
@@ -235,15 +258,19 @@ mod tests {
         );
         assert_eq!(
             resolve_model_identifier(Some("qwen2")).unwrap(),
-            "Qwen/Qwen2-7B-Instruct"
+            "qwen/qwen2.5-coder-14b"
         );
         assert_eq!(
             resolve_model_identifier(Some("qwen3")).unwrap(),
-            "Qwen/Qwen3-7B-Instruct"
+            "qwen/qwen3-4b-2507"
         );
         assert_eq!(
             resolve_model_identifier(Some("qwen3-moe")).unwrap(),
-            "Qwen/Qwen3-MoE-A2.7B-Instruct"
+            "qwen/qwen3-coder-30b"
+        );
+        assert_eq!(
+            resolve_model_identifier(Some("qwen3-moe-a3b")).unwrap(),
+            "qwen/qwen3-30b-a3b-2507"
         );
     }
 
@@ -270,7 +297,7 @@ mod tests {
         let response = serde_json::json!({
             "data": [
                 { "id": DEFAULT_LM_STUDIO_MODEL },
-                { "id": "Qwen/Qwen3-7B-Instruct" }
+                { "id": "qwen/qwen3-4b-2507" }
             ]
         });
         Mock::given(method("GET"))
