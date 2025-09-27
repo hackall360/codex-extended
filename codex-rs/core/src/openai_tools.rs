@@ -277,8 +277,38 @@ fn create_view_image_tool() -> OpenAiTool {
 }
 /// TODO(dylan): deprecate once we get rid of json tool
 #[derive(Serialize, Deserialize)]
-pub(crate) struct ApplyPatchToolArgs {
-    pub(crate) input: String,
+#[serde(untagged)]
+pub(crate) enum ApplyPatchToolArgs {
+    /// Preferred shape where the patch contents are carried in the `input` field.
+    Input { input: String },
+    /// Legacy payloads that used a `patch` field.
+    LegacyPatch { patch: String },
+    /// Some older clients pass a shell-style command array. Accept the second
+    /// element as the patch contents when present.
+    LegacyCommand { command: Vec<String> },
+    /// Bare string arguments emitted by certain OSS backends.
+    Raw(String),
+}
+
+impl ApplyPatchToolArgs {
+    pub(crate) fn into_patch(self) -> Result<String, String> {
+        match self {
+            ApplyPatchToolArgs::Input { input } => Ok(input),
+            ApplyPatchToolArgs::LegacyPatch { patch } => Ok(patch),
+            ApplyPatchToolArgs::LegacyCommand { command } => {
+                if command.len() < 2 {
+                    return Err("apply_patch command array missing patch contents".to_string());
+                }
+                if command.first().map(String::as_str) != Some("apply_patch") {
+                    return Err(
+                        "apply_patch command array must start with `apply_patch`".to_string()
+                    );
+                }
+                Ok(command[1].clone())
+            }
+            ApplyPatchToolArgs::Raw(raw) => Ok(raw),
+        }
+    }
 }
 
 /// Returns JSON values that are compatible with Function Calling in the
