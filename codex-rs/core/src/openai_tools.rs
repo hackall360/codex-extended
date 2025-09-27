@@ -369,7 +369,7 @@ pub(crate) fn mcp_tool_to_openai_tool(
 ///   and otherwise defaults to "string".
 /// - Fills required child fields (e.g. array items, object properties) with
 ///   permissive defaults when absent.
-fn sanitize_json_schema(value: &mut JsonValue) {
+pub(crate) fn sanitize_json_schema(value: &mut JsonValue) {
     match value {
         JsonValue::Bool(_) => {
             // JSON Schema boolean form: true/false. Coerce to an accept-all string.

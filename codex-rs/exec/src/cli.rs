@@ -15,7 +15,8 @@ pub struct Cli {
     #[arg(long = "image", short = 'i', value_name = "FILE", value_delimiter = ',', num_args = 1..)]
     pub images: Vec<PathBuf>,
 
-    /// Model the agent should use.
+    /// Model the agent should use. For LM Studio backends, pass architecture aliases such as
+    /// `llama`, `qwen2`, `qwen3`, or `qwen3-moe`.
     #[arg(long, short = 'm')]
     pub model: Option<String>,
 

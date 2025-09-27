@@ -78,7 +78,7 @@ Codex can run fully locally by delegating inference to [LM Studio](https://lmstu
 3. Run Codex with the LM Studio backend:
 
    ```shell
-   # Interactive session using the default LLaMA 3.1 8B Instruct model
+   # Interactive session using the default DevStral Small (LLaMA architecture) build
    codex --backend lmstudio
 
    # Explicitly pick one of the supported architectures
@@ -88,14 +88,17 @@ Codex can run fully locally by delegating inference to [LM Studio](https://lmstu
 
 Codex understands the following architecture aliases when `--backend lmstudio` is selected:
 
-| Alias      | LM Studio model identifier                          |
-| ---------- | --------------------------------------------------- |
-| `llama`    | `meta-llama/Meta-Llama-3.1-8B-Instruct`              |
-| `qwen2`    | `Qwen/Qwen2-7B-Instruct`                            |
-| `qwen3`    | `Qwen/Qwen3-7B-Instruct`                            |
-| `qwen3-moe`| `Qwen/Qwen3-MoE-A2.7B-Instruct`                     |
+| Alias          | LM Studio model identifier            |
+| -------------- | ------------------------------------- |
+| `llama`        | `mistralai/devstral-small-2507`       |
+| `qwen2`        | `qwen/qwen2.5-coder-14b`              |
+| `qwen3`        | `qwen/qwen3-4b-2507`                  |
+| `qwen3-moe`    | `qwen/qwen3-coder-30b`                |
+| `qwen3-moe-a3b`| `qwen/qwen3-30b-a3b-2507`             |
 
 You can also pass the exact LM Studio identifier (for example `my-org/custom-model`) if you are running a different checkpoint. Codex verifies that the requested model is available from LM Studio and surfaces clear errors when it is not.
+
+Structured output (`--output-schema`) works with LM Studio; Codex automatically forwards your schema using the OpenAI-compatible `response_format` field so local models can emit strict JSON.
 
 ---
 

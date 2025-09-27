@@ -23,6 +23,7 @@ use crate::error::CodexErr;
 use crate::error::Result;
 use crate::model_family::ModelFamily;
 use crate::openai_tools::create_tools_json_for_chat_completions_api;
+use crate::openai_tools::sanitize_json_schema;
 use crate::util::backoff;
 use codex_protocol::models::ContentItem;
 use codex_protocol::models::ReasoningItemContent;
@@ -35,12 +36,6 @@ pub(crate) async fn stream_chat_completions(
     client: &reqwest::Client,
     provider: &ModelProviderInfo,
 ) -> Result<ResponseStream> {
-    if prompt.output_schema.is_some() {
-        return Err(CodexErr::UnsupportedOperation(
-            "output_schema is not supported for Chat Completions API".to_string(),
-        ));
-    }
-
     // Build messages array
     let mut messages = Vec::<serde_json::Value>::new();
 
@@ -274,12 +269,30 @@ pub(crate) async fn stream_chat_completions(
     }
 
     let tools_json = create_tools_json_for_chat_completions_api(&prompt.tools)?;
-    let payload = json!({
+    let mut payload = json!({
         "model": model_family.slug,
         "messages": messages,
         "stream": true,
         "tools": tools_json,
     });
+
+    if let Some(schema) = &prompt.output_schema
+        && let Some(obj) = payload.as_object_mut()
+    {
+        let mut sanitized_schema = schema.clone();
+        sanitize_json_schema(&mut sanitized_schema);
+        obj.insert(
+            "response_format".to_string(),
+            json!({
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "codex_output_schema",
+                    "schema": sanitized_schema,
+                    "strict": true,
+                }
+            }),
+        );
+    }
 
     debug!(
         "POST to {}: {}",

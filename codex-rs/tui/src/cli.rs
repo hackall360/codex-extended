@@ -28,7 +28,8 @@ pub struct Cli {
     #[clap(skip)]
     pub resume_session_id: Option<String>,
 
-    /// Model the agent should use.
+    /// Model the agent should use. When using LM Studio, pass architecture aliases like `llama`,
+    /// `qwen2`, `qwen3`, or `qwen3-moe`.
     #[arg(long, short = 'm')]
     pub model: Option<String>,
 

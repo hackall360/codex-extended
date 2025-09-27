@@ -12,6 +12,7 @@ use codex_core::ResponseItem;
 use codex_core::WireApi;
 use codex_core::spawn::CODEX_SANDBOX_NETWORK_DISABLED_ENV_VAR;
 use codex_protocol::mcp_protocol::ConversationId;
+use codex_protocol::models::FunctionCallOutputPayload;
 use core_test_support::load_default_config_for_test;
 use futures::StreamExt;
 use serde_json::Value;
@@ -26,7 +27,7 @@ fn network_disabled() -> bool {
     std::env::var(CODEX_SANDBOX_NETWORK_DISABLED_ENV_VAR).is_ok()
 }
 
-async fn run_request(input: Vec<ResponseItem>) -> Value {
+async fn run_request(input: Vec<ResponseItem>, output_schema: Option<Value>) -> Value {
     let server = MockServer::start().await;
 
     let template = ResponseTemplate::new(200)
@@ -81,6 +82,7 @@ async fn run_request(input: Vec<ResponseItem>) -> Value {
 
     let mut prompt = Prompt::default();
     prompt.input = input;
+    prompt.output_schema = output_schema;
 
     let mut stream = match client.stream(&prompt).await {
         Ok(s) => s,
@@ -180,7 +182,7 @@ async fn omits_reasoning_when_none_present() {
         return;
     }
 
-    let body = run_request(vec![user_message("u1"), assistant_message("a1")]).await;
+    let body = run_request(vec![user_message("u1"), assistant_message("a1")], None).await;
     let messages = messages_from(&body);
     let assistant = first_assistant(&messages);
 
@@ -197,11 +199,14 @@ async fn attaches_reasoning_to_previous_assistant() {
         return;
     }
 
-    let body = run_request(vec![
-        user_message("u1"),
-        assistant_message("a1"),
-        reasoning_item("rA"),
-    ])
+    let body = run_request(
+        vec![
+            user_message("u1"),
+            assistant_message("a1"),
+            reasoning_item("rA"),
+        ],
+        None,
+    )
     .await;
     let messages = messages_from(&body);
     let assistant = first_assistant(&messages);
@@ -219,11 +224,10 @@ async fn attaches_reasoning_to_function_call_anchor() {
         return;
     }
 
-    let body = run_request(vec![
-        user_message("u1"),
-        reasoning_item("rFunc"),
-        function_call(),
-    ])
+    let body = run_request(
+        vec![user_message("u1"), reasoning_item("rFunc"), function_call()],
+        None,
+    )
     .await;
     let messages = messages_from(&body);
     let assistant = first_assistant(&messages);
@@ -246,11 +250,14 @@ async fn attaches_reasoning_to_local_shell_call() {
         return;
     }
 
-    let body = run_request(vec![
-        user_message("u1"),
-        reasoning_item("rShell"),
-        local_shell_call(),
-    ])
+    let body = run_request(
+        vec![
+            user_message("u1"),
+            reasoning_item("rShell"),
+            local_shell_call(),
+        ],
+        None,
+    )
     .await;
     let messages = messages_from(&body);
     let assistant = first_assistant(&messages);
@@ -271,11 +278,14 @@ async fn drops_reasoning_when_last_role_is_user() {
         return;
     }
 
-    let body = run_request(vec![
-        assistant_message("aPrev"),
-        reasoning_item("rHist"),
-        user_message("uNew"),
-    ])
+    let body = run_request(
+        vec![
+            assistant_message("aPrev"),
+            reasoning_item("rHist"),
+            user_message("uNew"),
+        ],
+        None,
+    )
     .await;
     let messages = messages_from(&body);
     assert!(messages.iter().all(|msg| msg.get("reasoning").is_none()));
@@ -290,12 +300,15 @@ async fn ignores_reasoning_before_last_user() {
         return;
     }
 
-    let body = run_request(vec![
-        user_message("u1"),
-        assistant_message("a1"),
-        user_message("u2"),
-        reasoning_item("rAfterU1"),
-    ])
+    let body = run_request(
+        vec![
+            user_message("u1"),
+            assistant_message("a1"),
+            user_message("u2"),
+            reasoning_item("rAfterU1"),
+        ],
+        None,
+    )
     .await;
     let messages = messages_from(&body);
     assert!(messages.iter().all(|msg| msg.get("reasoning").is_none()));
@@ -310,12 +323,15 @@ async fn skips_empty_reasoning_segments() {
         return;
     }
 
-    let body = run_request(vec![
-        user_message("u1"),
-        assistant_message("a1"),
-        reasoning_item(""),
-        reasoning_item("   "),
-    ])
+    let body = run_request(
+        vec![
+            user_message("u1"),
+            assistant_message("a1"),
+            reasoning_item(""),
+            reasoning_item("   "),
+        ],
+        None,
+    )
     .await;
     let messages = messages_from(&body);
     let assistant = first_assistant(&messages);
@@ -331,7 +347,11 @@ async fn suppresses_duplicate_assistant_messages() {
         return;
     }
 
-    let body = run_request(vec![assistant_message("dup"), assistant_message("dup")]).await;
+    let body = run_request(
+        vec![assistant_message("dup"), assistant_message("dup")],
+        None,
+    )
+    .await;
     let messages = messages_from(&body);
     let assistant_messages: Vec<_> = messages
         .iter()
@@ -342,4 +362,67 @@ async fn suppresses_duplicate_assistant_messages() {
         assistant_messages[0]["content"],
         Value::String("dup".into())
     );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn includes_response_format_when_schema_present() {
+    if network_disabled() {
+        println!(
+            "Skipping test because it cannot execute when network is disabled in a Codex sandbox."
+        );
+        return;
+    }
+
+    let schema = serde_json::json!({
+        "type": "object",
+        "properties": { "answer": { "type": "string" } },
+        "required": ["answer"]
+    });
+
+    let body = run_request(vec![user_message("u1")], Some(schema.clone())).await;
+    let expected = serde_json::json!({
+        "type": "json_schema",
+        "json_schema": {
+            "name": "codex_output_schema",
+            "schema": schema,
+            "strict": true,
+        }
+    });
+
+    assert_eq!(body.get("response_format"), Some(&expected));
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn includes_tool_call_outputs() {
+    if network_disabled() {
+        println!(
+            "Skipping test because it cannot execute when network is disabled in a Codex sandbox."
+        );
+        return;
+    }
+
+    let body = run_request(
+        vec![
+            user_message("u1"),
+            function_call(),
+            ResponseItem::FunctionCallOutput {
+                call_id: "c1".into(),
+                output: FunctionCallOutputPayload {
+                    content: "done".into(),
+                    success: Some(true),
+                },
+            },
+        ],
+        None,
+    )
+    .await;
+
+    let messages = messages_from(&body);
+    let tool_message = messages
+        .iter()
+        .find(|msg| msg["role"] == "tool")
+        .expect("tool message missing");
+
+    assert_eq!(tool_message["tool_call_id"], Value::String("c1".into()));
+    assert_eq!(tool_message["content"], Value::String("done".into()));
 }
