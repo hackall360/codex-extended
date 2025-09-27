@@ -59,7 +59,7 @@ To run Codex entirely against a local LM Studio instance:
    codex exec --backend lmstudio --model qwen3-moe "generate unit tests"
    ```
 
-Codex accepts friendly aliases for the most common LM Studio builds (`llama`, `qwen2`, `qwen3`, `qwen3-moe`, `qwen3-moe-a3b`) or you can pass the exact identifier shown in LM Studio. If the requested model is not available, Codex reports a clear error so you can download or start it inside LM Studio. Structured output is optional: when you provide `--output-schema`, Codex forwards the schema to LM Studio via the OpenAI-compatible `response_format` field.
+Codex accepts friendly aliases for the most common LM Studio builds (`llama`, `qwen2`, `qwen3`, `qwen3-moe`, `qwen3-moe-a3b`) or you can pass the exact identifier shown in LM Studio. If the requested model is not available, Codex reports a clear error so you can download or start it inside LM Studio. Structured JSON responses are enabled automatically for LM Studio so models reliably see command output; no additional flags are required.
 
 ### Example prompts
 

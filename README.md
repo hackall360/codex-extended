@@ -98,7 +98,7 @@ Codex understands the following architecture aliases when `--backend lmstudio` i
 
 You can also pass the exact LM Studio identifier (for example `my-org/custom-model`) if you are running a different checkpoint. Codex verifies that the requested model is available from LM Studio and surfaces clear errors when it is not.
 
-Structured output is optional with LM Studio: Codex automatically forwards a schema when you provide `--output-schema`, but models can access command/tool output even without one.
+When you select the LM Studio backend Codex automatically enables structured JSON output so the agent can reliably capture command results. No extra flags are required.
 
 ---
 
