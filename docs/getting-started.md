@@ -45,6 +45,22 @@ That's it - Codex will scaffold a file, run it inside a sandbox, install any
 missing dependencies, and show you the live result. Approve the changes and
 they'll be committed to your working directory.
 
+### Using LM Studio as the runtime backend
+
+To run Codex entirely against a local LM Studio instance:
+
+1. Launch LM Studio, open **Preferences → Developer**, and enable the *Local Inference Server*.
+2. Start the model you want to expose from LM Studio's **My Models** tab.
+3. Select the backend and architecture when launching Codex:
+
+   ```shell
+   codex --backend lmstudio                # defaults to LLaMA 3.1 8B Instruct
+   codex --backend lmstudio --model qwen2  # pick a specific architecture
+   codex exec --backend lmstudio --model qwen3-moe "generate unit tests"
+   ```
+
+Codex accepts friendly aliases for the most common LM Studio builds (`llama`, `qwen2`, `qwen3`, `qwen3-moe`) or you can pass the exact identifier shown in LM Studio. If the requested model is not available, Codex reports a clear error so you can download or start it inside LM Studio.
+
 ### Example prompts
 
 Below are a few bite-size examples you can copy-paste. Replace the text in quotes with your own task.

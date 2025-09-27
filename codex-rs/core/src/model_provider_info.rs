@@ -248,8 +248,10 @@ impl ModelProviderInfo {
 }
 
 const DEFAULT_OLLAMA_PORT: u32 = 11434;
+const DEFAULT_LM_STUDIO_PORT: u32 = 1234;
 
 pub const BUILT_IN_OSS_MODEL_PROVIDER_ID: &str = "oss";
+pub const BUILT_IN_LM_STUDIO_MODEL_PROVIDER_ID: &str = "lmstudio";
 
 /// Built-in default provider list.
 pub fn built_in_model_providers() -> HashMap<String, ModelProviderInfo> {
@@ -257,8 +259,9 @@ pub fn built_in_model_providers() -> HashMap<String, ModelProviderInfo> {
 
     // We do not want to be in the business of adjucating which third-party
     // providers are bundled with Codex CLI, so we only include the OpenAI and
-    // open source ("oss") providers by default. Users are encouraged to add to
-    // `model_providers` in config.toml to add their own providers.
+    // local open source providers (Ollama "oss" and LM Studio) by default. Users
+    // are encouraged to add to `model_providers` in config.toml to add their own
+    // providers.
     [
         (
             "openai",
@@ -300,6 +303,10 @@ pub fn built_in_model_providers() -> HashMap<String, ModelProviderInfo> {
             },
         ),
         (BUILT_IN_OSS_MODEL_PROVIDER_ID, create_oss_provider()),
+        (
+            BUILT_IN_LM_STUDIO_MODEL_PROVIDER_ID,
+            create_lmstudio_provider(),
+        ),
     ]
     .into_iter()
     .map(|(k, v)| (k.to_string(), v))
@@ -333,6 +340,45 @@ pub fn create_oss_provider_with_base_url(base_url: &str) -> ModelProviderInfo {
         base_url: Some(base_url.into()),
         env_key: None,
         env_key_instructions: None,
+        wire_api: WireApi::Chat,
+        query_params: None,
+        http_headers: None,
+        env_http_headers: None,
+        request_max_retries: None,
+        stream_max_retries: None,
+        stream_idle_timeout_ms: None,
+        requires_openai_auth: false,
+    }
+}
+
+pub fn create_lmstudio_provider() -> ModelProviderInfo {
+    let base_url = match std::env::var("CODEX_LM_STUDIO_BASE_URL")
+        .ok()
+        .filter(|v| !v.trim().is_empty())
+    {
+        Some(url) => url,
+        None => format!(
+            "http://localhost:{port}/v1",
+            port = std::env::var("CODEX_LM_STUDIO_PORT")
+                .ok()
+                .filter(|v| !v.trim().is_empty())
+                .and_then(|v| v.parse::<u32>().ok())
+                .unwrap_or(DEFAULT_LM_STUDIO_PORT)
+        ),
+    };
+
+    create_lmstudio_provider_with_base_url(&base_url)
+}
+
+pub fn create_lmstudio_provider_with_base_url(base_url: &str) -> ModelProviderInfo {
+    ModelProviderInfo {
+        name: "LM Studio".into(),
+        base_url: Some(base_url.into()),
+        env_key: None,
+        env_key_instructions: Some(
+            "Launch LM Studio and enable the local inference server (Preferences → Developer → Enable local server)."
+                .into(),
+        ),
         wire_api: WireApi::Chat,
         query_params: None,
         http_headers: None,
@@ -384,6 +430,43 @@ base_url = "http://localhost:11434/v1"
 
         let provider: ModelProviderInfo = toml::from_str(azure_provider_toml).unwrap();
         assert_eq!(expected_provider, provider);
+    }
+
+    #[test]
+    fn test_deserialize_lmstudio_model_provider_toml() {
+        let provider_toml = r#"
+name = "LM Studio"
+base_url = "http://localhost:1234/v1"
+        "#;
+        let expected_provider = ModelProviderInfo {
+            name: "LM Studio".into(),
+            base_url: Some("http://localhost:1234/v1".into()),
+            env_key: None,
+            env_key_instructions: None,
+            wire_api: WireApi::Chat,
+            query_params: None,
+            http_headers: None,
+            env_http_headers: None,
+            request_max_retries: None,
+            stream_max_retries: None,
+            stream_idle_timeout_ms: None,
+            requires_openai_auth: false,
+        };
+
+        let provider: ModelProviderInfo = toml::from_str(provider_toml).unwrap();
+        assert_eq!(expected_provider, provider);
+    }
+
+    #[test]
+    fn test_create_lmstudio_provider_with_base_url() {
+        let provider = create_lmstudio_provider_with_base_url("http://localhost:9999/v1");
+        assert_eq!(provider.name, "LM Studio");
+        assert_eq!(
+            provider.base_url.as_deref(),
+            Some("http://localhost:9999/v1")
+        );
+        assert_eq!(provider.wire_api, WireApi::Chat);
+        assert!(!provider.requires_openai_auth);
     }
 
     #[test]

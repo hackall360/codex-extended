@@ -14,6 +14,7 @@ members = [
     "login",
     "mcp-client",
     "mcp-server",
+    "lmstudio",
     "mcp-types",
     "ollama",
     "protocol",
@@ -50,6 +51,7 @@ codex-mcp-client = { path = "mcp-client" }
 codex-mcp-server = { path = "mcp-server" }
 codex-ollama = { path = "ollama" }
 codex-protocol = { path = "protocol" }
+codex-lmstudio = { path = "lmstudio" }
 codex-rmcp-client = { path = "rmcp-client" }
 codex-protocol-ts = { path = "protocol-ts" }
 codex-responses-api-proxy = { path = "responses-api-proxy" }

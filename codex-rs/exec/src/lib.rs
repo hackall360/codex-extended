@@ -10,8 +10,8 @@ use std::io::Read;
 use std::path::PathBuf;
 
 pub use cli::Cli;
+use codex_common::BackendCliArg;
 use codex_core::AuthManager;
-use codex_core::BUILT_IN_OSS_MODEL_PROVIDER_ID;
 use codex_core::ConversationManager;
 use codex_core::NewConversation;
 use codex_core::config::Config;
@@ -23,6 +23,7 @@ use codex_core::protocol::EventMsg;
 use codex_core::protocol::InputItem;
 use codex_core::protocol::Op;
 use codex_core::protocol::TaskCompleteEvent;
+use codex_lmstudio::DEFAULT_LM_STUDIO_MODEL;
 use codex_ollama::DEFAULT_OSS_MODEL;
 use codex_protocol::config_types::SandboxMode;
 use event_processor_with_human_output::EventProcessorWithHumanOutput;
@@ -44,6 +45,7 @@ pub async fn run_main(cli: Cli, codex_linux_sandbox_exe: Option<PathBuf>) -> any
         command,
         images,
         model: model_cli_arg,
+        backend,
         oss,
         config_profile,
         full_auto,
@@ -136,22 +138,37 @@ pub async fn run_main(cli: Cli, codex_linux_sandbox_exe: Option<PathBuf>) -> any
         sandbox_mode_cli_arg.map(Into::<SandboxMode>::into)
     };
 
-    // When using `--oss`, let the bootstrapper pick the model (defaulting to
-    // gpt-oss:20b) and ensure it is present locally. Also, force the built‑in
-    // `oss` model provider.
-    let model = if let Some(model) = model_cli_arg {
+    // Determine which backend to target and derive defaults accordingly.
+    let backend_choice = backend.unwrap_or(if oss {
+        BackendCliArg::Oss
+    } else {
+        BackendCliArg::Openai
+    });
+    let using_oss = backend_choice.is_oss();
+    let using_lmstudio = backend_choice.is_lmstudio();
+
+    let mut model = if let Some(model) = model_cli_arg {
         Some(model)
-    } else if oss {
+    } else if using_oss {
         Some(DEFAULT_OSS_MODEL.to_owned())
+    } else if using_lmstudio {
+        Some(DEFAULT_LM_STUDIO_MODEL.to_owned())
     } else {
         None // No model specified, will use the default.
     };
 
-    let model_provider = if oss {
-        Some(BUILT_IN_OSS_MODEL_PROVIDER_ID.to_string())
-    } else {
-        None // No specific model provider override.
-    };
+    if using_lmstudio {
+        let resolved = match codex_lmstudio::resolve_model_identifier(model.as_deref()) {
+            Ok(model) => model,
+            Err(err) => {
+                eprintln!("{err}");
+                std::process::exit(1);
+            }
+        };
+        model = Some(resolved);
+    }
+
+    let model_provider = backend_choice.provider_key().map(ToString::to_string);
 
     // Load configuration and determine approval policy
     let overrides = ConfigOverrides {
@@ -169,7 +186,7 @@ pub async fn run_main(cli: Cli, codex_linux_sandbox_exe: Option<PathBuf>) -> any
         include_plan_tool: Some(include_plan_tool),
         include_apply_patch_tool: None,
         include_view_image_tool: None,
-        show_raw_agent_reasoning: oss.then_some(true),
+        show_raw_agent_reasoning: using_oss.then_some(true),
         tools_web_search_request: None,
     };
     // Parse `-c` overrides.
@@ -200,10 +217,16 @@ pub async fn run_main(cli: Cli, codex_linux_sandbox_exe: Option<PathBuf>) -> any
         )),
     };
 
-    if oss {
+    if using_oss {
         codex_ollama::ensure_oss_ready(&config)
             .await
             .map_err(|e| anyhow::anyhow!("OSS setup failed: {e}"))?;
+    }
+
+    if using_lmstudio {
+        codex_lmstudio::ensure_lmstudio_ready(&config)
+            .await
+            .map_err(|e| anyhow::anyhow!("LM Studio setup failed: {e}"))?;
     }
 
     let default_cwd = config.cwd.to_path_buf();
