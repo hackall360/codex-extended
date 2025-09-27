@@ -2398,8 +2398,13 @@ async fn handle_function_call(
                     "failed to parse function arguments: {e:?}"
                 ))
             })?;
+            let patch = args.into_patch().map_err(|msg| {
+                FunctionCallError::RespondToModel(format!(
+                    "unsupported apply_patch arguments: {msg}"
+                ))
+            })?;
             let exec_params = ExecParams {
-                command: vec!["apply_patch".to_string(), args.input.clone()],
+                command: vec!["apply_patch".to_string(), patch],
                 cwd: turn_context.cwd.clone(),
                 timeout_ms: None,
                 env: HashMap::new(),

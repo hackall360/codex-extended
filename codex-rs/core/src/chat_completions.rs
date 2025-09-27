@@ -690,8 +690,7 @@ mod tests {
         assert!(!call_id.is_empty(), "call_id should not be empty");
         assert!(
             call_id.starts_with("tool_call_"),
-            "unexpected fallback call_id prefix: {}",
-            call_id
+            "unexpected fallback call_id prefix: {call_id}"
         );
     }
 }
