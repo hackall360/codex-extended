@@ -135,7 +135,10 @@ pub async fn run_main(
         let resolved = match codex_lmstudio::resolve_model_identifier(model.as_deref()) {
             Ok(model) => model,
             Err(err) => {
-                eprintln!("{err}");
+                #[allow(clippy::print_stderr)]
+                {
+                    eprintln!("{err}");
+                }
                 std::process::exit(1);
             }
         };
@@ -160,6 +163,7 @@ pub async fn run_main(
         include_plan_tool: Some(true),
         include_apply_patch_tool: None,
         include_view_image_tool: None,
+        parallel_tool_calls: cli.parallel_tool_calls.then_some(true),
         show_raw_agent_reasoning: using_oss.then_some(true),
         tools_web_search_request: cli.web_search.then_some(true),
     };

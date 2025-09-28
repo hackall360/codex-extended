@@ -127,6 +127,7 @@ impl ModelClient {
                     &self.config.model_family,
                     &self.client,
                     &self.provider,
+                    self.config.parallel_tool_calls,
                 )
                 .await?;
 
@@ -216,7 +217,7 @@ impl ModelClient {
             input: &input_with_instructions,
             tools: &tools_json,
             tool_choice: "auto",
-            parallel_tool_calls: false,
+            parallel_tool_calls: self.config.parallel_tool_calls,
             reasoning,
             store: azure_workaround,
             stream: true,
