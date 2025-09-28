@@ -21,6 +21,8 @@ use tokio::sync::mpsc;
 /// Review thread system prompt. Edit `core/src/review_prompt.md` to customize.
 pub const REVIEW_PROMPT: &str = include_str!("../review_prompt.md");
 
+const QWEN3_CODER_SYSTEM_INSTRUCTIONS: &str = "When tools are available, call them directly using the `tool_calls` format without extra explanation. Do not output `<think>` blocks.";
+
 /// API request payload for a single model turn
 #[derive(Default, Debug, Clone)]
 pub struct Prompt {
@@ -53,18 +55,47 @@ impl Prompt {
             OpenAiTool::Freeform(f) => f.name == "apply_patch",
             _ => false,
         });
-        if self.base_instructions_override.is_none()
+        let mut instructions = if self.base_instructions_override.is_none()
             && model.needs_special_apply_patch_instructions
             && !is_apply_patch_tool_present
         {
             Cow::Owned(format!("{base}\n{APPLY_PATCH_TOOL_INSTRUCTIONS}"))
         } else {
             Cow::Borrowed(base)
+        };
+
+        if let Some(extra) = extra_instructions_for_model(model) {
+            instructions = match instructions {
+                Cow::Borrowed(base) => {
+                    let mut owned = base.to_string();
+                    if !owned.ends_with('\n') {
+                        owned.push('\n');
+                    }
+                    owned.push_str(extra);
+                    Cow::Owned(owned)
+                }
+                Cow::Owned(mut owned) => {
+                    if !owned.ends_with('\n') {
+                        owned.push('\n');
+                    }
+                    owned.push_str(extra);
+                    Cow::Owned(owned)
+                }
+            };
         }
+
+        instructions
     }
 
     pub(crate) fn get_formatted_input(&self) -> Vec<ResponseItem> {
         self.input.clone()
+    }
+}
+
+fn extra_instructions_for_model(model: &ModelFamily) -> Option<&'static str> {
+    match model.slug.as_str() {
+        "qwen/qwen3-coder-30b" => Some(QWEN3_CODER_SYSTEM_INSTRUCTIONS),
+        _ => None,
     }
 }
 
@@ -367,5 +398,19 @@ mod tests {
 
         let v = serde_json::to_value(&req).expect("json");
         assert!(v.get("text").is_none());
+    }
+
+    #[test]
+    fn adds_qwen3_coder_system_instructions() {
+        let prompt = Prompt::default();
+        let model_family = find_family_for_model("qwen/qwen3-coder-30b").expect("known model");
+
+        let instructions = prompt.get_full_instructions(&model_family);
+        let instructions = instructions.as_ref();
+
+        assert!(
+            instructions.ends_with(QWEN3_CODER_SYSTEM_INSTRUCTIONS),
+            "expected qwen-specific guidance to be appended"
+        );
     }
 }

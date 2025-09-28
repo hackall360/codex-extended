@@ -5,6 +5,7 @@ use eventsource_stream::Eventsource;
 use futures::Stream;
 use futures::StreamExt;
 use futures::TryStreamExt;
+use regex_lite::Regex;
 use reqwest::StatusCode;
 use serde_json::json;
 use std::pin::Pin;
@@ -36,6 +37,7 @@ pub(crate) async fn stream_chat_completions(
     model_family: &ModelFamily,
     client: &reqwest::Client,
     provider: &ModelProviderInfo,
+    parallel_tool_calls: bool,
 ) -> Result<ResponseStream> {
     // Build messages array
     let mut messages = Vec::<serde_json::Value>::new();
@@ -276,6 +278,13 @@ pub(crate) async fn stream_chat_completions(
         "stream": true,
         "tools": tools_json,
     });
+
+    if parallel_tool_calls && let Some(obj) = payload.as_object_mut() {
+        obj.insert(
+            "parallel_tool_calls".to_string(),
+            serde_json::Value::Bool(true),
+        );
+    }
 
     if let Some(schema) = &prompt.output_schema
         && let Some(obj) = payload.as_object_mut()
@@ -602,9 +611,52 @@ async fn process_chat_sse<S>(
                         let _ = tx_event.send(Ok(ResponseEvent::OutputItemDone(item))).await;
                     }
                     "stop" => {
+                        let mut reasoning_emitted = false;
+
+                        if !fn_call_state.active && !assistant_text.is_empty() {
+                            let (cleaned_text, parsed_calls) =
+                                extract_embedded_tool_calls(&assistant_text);
+
+                            if !parsed_calls.is_empty() {
+                                assistant_text = cleaned_text;
+
+                                if !reasoning_text.is_empty() {
+                                    let item = ResponseItem::Reasoning {
+                                        id: String::new(),
+                                        summary: Vec::new(),
+                                        content: Some(vec![ReasoningItemContent::ReasoningText {
+                                            text: std::mem::take(&mut reasoning_text),
+                                        }]),
+                                        encrypted_content: None,
+                                    };
+                                    let _ = tx_event
+                                        .send(Ok(ResponseEvent::OutputItemDone(item)))
+                                        .await;
+                                    reasoning_emitted = true;
+                                }
+
+                                for call in parsed_calls {
+                                    let call_id = call
+                                        .call_id
+                                        .unwrap_or_else(|| format!("tool_call_{}", Uuid::new_v4()));
+                                    let item = ResponseItem::FunctionCall {
+                                        id: None,
+                                        name: call.name,
+                                        arguments: call.arguments,
+                                        call_id,
+                                    };
+                                    let _ = tx_event
+                                        .send(Ok(ResponseEvent::OutputItemDone(item)))
+                                        .await;
+                                }
+                            }
+                        }
+
                         // Regular turn without tool-call. Emit the final assistant message
                         // as a single OutputItemDone so non-delta consumers see the result.
-                        if !assistant_text.is_empty() {
+                        let has_message_content =
+                            assistant_text.chars().any(|c| !c.is_whitespace());
+                        if has_message_content {
                             let item = ResponseItem::Message {
                                 role: "assistant".to_string(),
                                 content: vec![ContentItem::OutputText {
@@ -613,9 +665,12 @@ async fn process_chat_sse<S>(
                                 id: None,
                             };
                             let _ = tx_event.send(Ok(ResponseEvent::OutputItemDone(item))).await;
+                        } else {
+                            assistant_text.clear();
                         }
+
                         // Also emit a terminal Reasoning item so UIs can finalize raw reasoning.
-                        if !reasoning_text.is_empty() {
+                        if !reasoning_text.is_empty() && !reasoning_emitted {
                             let item = ResponseItem::Reasoning {
                                 id: String::new(),
                                 summary: Vec::new(),
@@ -645,6 +700,62 @@ async fn process_chat_sse<S>(
             }
         }
     }
+}
+
+#[derive(Debug)]
+struct EmbeddedToolCall {
+    name: String,
+    arguments: String,
+    call_id: Option<String>,
+}
+
+fn extract_embedded_tool_calls(text: &str) -> (String, Vec<EmbeddedToolCall>) {
+    let regex = match Regex::new(r"<tool_call>\s*([\s\S]*?)\s*</tool_call>") {
+        Ok(regex) => regex,
+        Err(_) => return (text.to_string(), Vec::new()),
+    };
+    let mut cleaned = String::with_capacity(text.len());
+    let mut tool_calls = Vec::new();
+    let mut last_index = 0;
+
+    for capture in regex.captures_iter(text) {
+        if let Some(m) = capture.get(0) {
+            cleaned.push_str(&text[last_index..m.start()]);
+
+            let inner = capture.get(1).map(|c| c.as_str().trim()).unwrap_or("");
+            match serde_json::from_str::<serde_json::Value>(inner) {
+                Ok(obj) => {
+                    let name = obj.get("name").and_then(|v| v.as_str());
+                    let arguments_value = obj.get("arguments");
+                    if let (Some(name), Some(arguments_value)) = (name, arguments_value) {
+                        let arguments = if let Some(s) = arguments_value.as_str() {
+                            s.to_string()
+                        } else {
+                            serde_json::to_string(arguments_value).unwrap_or_default()
+                        };
+                        let call_id = obj
+                            .get("id")
+                            .and_then(|v| v.as_str())
+                            .map(std::string::ToString::to_string);
+                        tool_calls.push(EmbeddedToolCall {
+                            name: name.to_string(),
+                            arguments,
+                            call_id,
+                        });
+                    } else {
+                        cleaned.push_str(m.as_str());
+                    }
+                }
+                Err(_) => cleaned.push_str(m.as_str()),
+            }
+
+            last_index = m.end();
+        }
+    }
+
+    cleaned.push_str(&text[last_index..]);
+
+    (cleaned, tool_calls)
 }
 
 #[cfg(test)]
@@ -692,6 +803,51 @@ mod tests {
             call_id.starts_with("tool_call_"),
             "unexpected fallback call_id prefix: {call_id}"
         );
+    }
+
+    #[tokio::test]
+    async fn converts_embedded_tool_call_tags_into_function_calls() {
+        let chunks = vec![
+            Ok::<Bytes, CodexErr>(Bytes::from_static(
+                b"data: {\"choices\":[{\"delta\":{\"content\":\"<tool_call>{\\\"name\\\":\\\"run\\\",\\\"arguments\\\":{\\\"cmd\\\":\\\"echo\\\"}}<\\/tool_call>\"}}]}\n\n",
+            )),
+            Ok::<Bytes, CodexErr>(Bytes::from_static(
+                b"data: {\"choices\":[{\"finish_reason\":\"stop\"}]}\n\n",
+            )),
+        ];
+
+        let stream = stream::iter(chunks);
+        let (tx, mut rx) = mpsc::channel(8);
+        let handle = tokio::spawn(async move {
+            process_chat_sse(stream, tx, Duration::from_secs(5)).await;
+        });
+
+        let mut observed = Vec::new();
+        while let Some(event) = rx.recv().await {
+            match event.expect("stream event") {
+                ResponseEvent::OutputItemDone(ResponseItem::FunctionCall {
+                    name,
+                    arguments,
+                    call_id,
+                    ..
+                }) => {
+                    observed.push((name, arguments, call_id));
+                }
+                ResponseEvent::OutputItemDone(ResponseItem::Message { .. }) => {
+                    panic!("unexpected assistant message emitted instead of tool call");
+                }
+                ResponseEvent::Completed { .. } => break,
+                _ => {}
+            }
+        }
+
+        handle.await.expect("process_chat_sse task");
+
+        assert_eq!(observed.len(), 1);
+        let (name, arguments, call_id) = observed.into_iter().next().unwrap();
+        assert_eq!(name, "run");
+        assert_eq!(arguments, "{\"cmd\":\"echo\"}");
+        assert!(call_id.starts_with("tool_call_"));
     }
 }
 

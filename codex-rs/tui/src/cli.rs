@@ -78,6 +78,10 @@ pub struct Cli {
     #[arg(long = "search", default_value_t = false)]
     pub web_search: bool,
 
+    /// Allow the model to request multiple tools within a single turn when supported.
+    #[arg(long = "parallel-tool-calls", default_value_t = false)]
+    pub parallel_tool_calls: bool,
+
     #[clap(skip)]
     pub config_overrides: CliConfigOverrides,
 }

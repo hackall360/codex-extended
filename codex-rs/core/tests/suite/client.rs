@@ -983,7 +983,9 @@ async fn usage_limit_error_emits_rate_limit_event() -> anyhow::Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn azure_overrides_assign_properties_used_for_responses_url() {
     skip_if_no_network!();
-    let existing_env_var_with_random_value = if cfg!(windows) { "USERNAME" } else { "USER" };
+    let (env_key, env_value) = std::env::vars()
+        .find(|(key, _)| key != "CODEX_SANDBOX_NETWORK_DISABLED")
+        .expect("tests require at least one environment variable");
 
     // Mock server
     let server = MockServer::start().await;
@@ -1000,11 +1002,7 @@ async fn azure_overrides_assign_properties_used_for_responses_url() {
         .and(header_regex("Custom-Header", "Value"))
         .and(header_regex(
             "Authorization",
-            format!(
-                "Bearer {}",
-                std::env::var(existing_env_var_with_random_value).unwrap()
-            )
-            .as_str(),
+            format!("Bearer {env_value}").as_str(),
         ))
         .respond_with(first)
         .expect(1)
@@ -1014,8 +1012,8 @@ async fn azure_overrides_assign_properties_used_for_responses_url() {
     let provider = ModelProviderInfo {
         name: "custom".to_string(),
         base_url: Some(format!("{}/openai", server.uri())),
-        // Reuse the existing environment variable to avoid using unsafe code
-        env_key: Some(existing_env_var_with_random_value.to_string()),
+        // Reuse an existing environment variable to avoid unsafe overrides
+        env_key: Some(env_key.clone()),
         query_params: Some(std::collections::HashMap::from([(
             "api-version".to_string(),
             "2025-04-01-preview".to_string(),
@@ -1060,7 +1058,9 @@ async fn azure_overrides_assign_properties_used_for_responses_url() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn env_var_overrides_loaded_auth() {
     skip_if_no_network!();
-    let existing_env_var_with_random_value = if cfg!(windows) { "USERNAME" } else { "USER" };
+    let (env_key, env_value) = std::env::vars()
+        .find(|(key, _)| key != "CODEX_SANDBOX_NETWORK_DISABLED")
+        .expect("tests require at least one environment variable");
 
     // Mock server
     let server = MockServer::start().await;
@@ -1077,11 +1077,7 @@ async fn env_var_overrides_loaded_auth() {
         .and(header_regex("Custom-Header", "Value"))
         .and(header_regex(
             "Authorization",
-            format!(
-                "Bearer {}",
-                std::env::var(existing_env_var_with_random_value).unwrap()
-            )
-            .as_str(),
+            format!("Bearer {env_value}").as_str(),
         ))
         .respond_with(first)
         .expect(1)
@@ -1091,8 +1087,8 @@ async fn env_var_overrides_loaded_auth() {
     let provider = ModelProviderInfo {
         name: "custom".to_string(),
         base_url: Some(format!("{}/openai", server.uri())),
-        // Reuse the existing environment variable to avoid using unsafe code
-        env_key: Some(existing_env_var_with_random_value.to_string()),
+        // Reuse an existing environment variable to avoid unsafe overrides
+        env_key: Some(env_key.clone()),
         query_params: Some(std::collections::HashMap::from([(
             "api-version".to_string(),
             "2025-04-01-preview".to_string(),

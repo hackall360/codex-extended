@@ -178,6 +178,9 @@ pub struct Config {
     /// model family's default preference.
     pub include_apply_patch_tool: bool,
 
+    /// Enable the parallel tool call mode when supported by the provider.
+    pub parallel_tool_calls: bool,
+
     pub tools_web_search_request: bool,
 
     pub use_experimental_streamable_shell_tool: bool,
@@ -694,6 +697,9 @@ pub struct ConfigToml {
     /// Optional verbosity control for GPT-5 models (Responses API `text.verbosity`).
     pub model_verbosity: Option<Verbosity>,
 
+    /// Allow the model to request multiple tools within a single turn.
+    pub parallel_tool_calls: Option<bool>,
+
     /// Override to force-enable reasoning summaries for the configured model.
     pub model_supports_reasoning_summaries: Option<bool>,
 
@@ -857,6 +863,7 @@ pub struct ConfigOverrides {
     pub include_plan_tool: Option<bool>,
     pub include_apply_patch_tool: Option<bool>,
     pub include_view_image_tool: Option<bool>,
+    pub parallel_tool_calls: Option<bool>,
     pub show_raw_agent_reasoning: Option<bool>,
     pub tools_web_search_request: Option<bool>,
 }
@@ -885,6 +892,7 @@ impl Config {
             include_plan_tool,
             include_apply_patch_tool,
             include_view_image_tool,
+            parallel_tool_calls,
             show_raw_agent_reasoning,
             tools_web_search_request: override_tools_web_search_request,
         } = overrides;
@@ -959,6 +967,10 @@ impl Config {
         let include_view_image_tool = include_view_image_tool
             .or(cfg.tools.as_ref().and_then(|t| t.view_image))
             .unwrap_or(true);
+
+        let parallel_tool_calls = parallel_tool_calls
+            .or(cfg.parallel_tool_calls)
+            .unwrap_or(false);
 
         let model = model
             .or(config_profile.model)
@@ -1052,6 +1064,7 @@ impl Config {
                 .unwrap_or("https://chatgpt.com/backend-api/".to_string()),
             include_plan_tool: include_plan_tool.unwrap_or(false),
             include_apply_patch_tool: include_apply_patch_tool.unwrap_or(false),
+            parallel_tool_calls,
             tools_web_search_request,
             use_experimental_streamable_shell_tool: cfg
                 .experimental_use_exec_command_tool
@@ -1801,6 +1814,7 @@ model_verbosity = "high"
                 base_instructions: None,
                 include_plan_tool: false,
                 include_apply_patch_tool: false,
+                parallel_tool_calls: false,
                 tools_web_search_request: false,
                 use_experimental_streamable_shell_tool: false,
                 use_experimental_unified_exec_tool: false,
@@ -1860,6 +1874,7 @@ model_verbosity = "high"
             base_instructions: None,
             include_plan_tool: false,
             include_apply_patch_tool: false,
+            parallel_tool_calls: false,
             tools_web_search_request: false,
             use_experimental_streamable_shell_tool: false,
             use_experimental_unified_exec_tool: false,
@@ -1934,6 +1949,7 @@ model_verbosity = "high"
             base_instructions: None,
             include_plan_tool: false,
             include_apply_patch_tool: false,
+            parallel_tool_calls: false,
             tools_web_search_request: false,
             use_experimental_streamable_shell_tool: false,
             use_experimental_unified_exec_tool: false,
@@ -1994,6 +2010,7 @@ model_verbosity = "high"
             base_instructions: None,
             include_plan_tool: false,
             include_apply_patch_tool: false,
+            parallel_tool_calls: false,
             tools_web_search_request: false,
             use_experimental_streamable_shell_tool: false,
             use_experimental_unified_exec_tool: false,
