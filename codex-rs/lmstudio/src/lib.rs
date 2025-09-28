@@ -37,10 +37,14 @@ const MODEL_ALIAS_TABLE: &[(&str, &str)] = &[
     ("qwen3_moe", "qwen/qwen3-coder-30b"),
     ("qwen-3-moe", "qwen/qwen3-coder-30b"),
     ("qwen3-coder", "qwen/qwen3-coder-30b"),
+    ("qwen3 coder", "qwen/qwen3-coder-30b"),
     ("qwen3-30b", "qwen/qwen3-coder-30b"),
+    ("qwen3 coder 30b", "qwen/qwen3-coder-30b"),
     ("qwen3-moe-a3b", "qwen/qwen3-30b-a3b-2507"),
     ("qwen3-moe-a3b-2507", "qwen/qwen3-30b-a3b-2507"),
     ("qwen3-30b-a3b", "qwen/qwen3-30b-a3b-2507"),
+    ("qwen3 coder a3b", "qwen/qwen3-30b-a3b-2507"),
+    ("qwen3 coder 30b a3b", "qwen/qwen3-30b-a3b-2507"),
 ];
 
 const MODEL_ALIAS_HINTS: &[(&str, &str)] = &[
@@ -56,6 +60,15 @@ fn alias_examples() -> String {
         .map(|(alias, model)| format!("{alias} → {model}"))
         .collect::<Vec<_>>()
         .join(", ")
+}
+
+fn normalized_alias_forms(value: &str) -> (String, String) {
+    let lowercase = value.to_ascii_lowercase();
+    let compact = lowercase
+        .chars()
+        .filter(|c| !matches!(c, '-' | '_' | ' '))
+        .collect();
+    (lowercase, compact)
 }
 
 /// Error returned when a provided LM Studio model alias cannot be resolved.
@@ -114,11 +127,11 @@ pub fn resolve_model_identifier(model: Option<&str>) -> Result<String, Unsupport
             if trimmed.is_empty() {
                 return Err(UnsupportedModelAliasError::new(trimmed));
             }
-            let normalized = trimmed.to_ascii_lowercase();
-            if let Some((_, canonical)) = MODEL_ALIAS_TABLE
-                .iter()
-                .find(|(alias, _)| *alias == normalized)
-            {
+            let (normalized, normalized_compact) = normalized_alias_forms(trimmed);
+            if let Some((_, canonical)) = MODEL_ALIAS_TABLE.iter().find(|(alias, _)| {
+                let (alias_normalized, alias_compact) = normalized_alias_forms(alias);
+                alias_normalized == normalized || alias_compact == normalized_compact
+            }) {
                 return Ok((*canonical).to_string());
             }
             if trimmed.contains('/') || trimmed.contains(':') {
@@ -271,6 +284,14 @@ mod tests {
         assert_eq!(
             resolve_model_identifier(Some("qwen3-moe-a3b")).unwrap(),
             "qwen/qwen3-30b-a3b-2507"
+        );
+        assert_eq!(
+            resolve_model_identifier(Some("qwen3 coder 30b a3b")).unwrap(),
+            "qwen/qwen3-30b-a3b-2507"
+        );
+        assert_eq!(
+            resolve_model_identifier(Some("Qwen3 Coder 30B")).unwrap(),
+            "qwen/qwen3-coder-30b"
         );
     }
 

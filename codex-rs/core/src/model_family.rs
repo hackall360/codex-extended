@@ -112,6 +112,15 @@ pub fn find_family_for_model(slug: &str) -> Option<ModelFamily> {
             supports_reasoning_summaries: true,
             needs_special_apply_patch_instructions: true,
         )
+    } else if slug.starts_with("mistralai/devstral")
+        || slug.starts_with("qwen/qwen2")
+        || slug.starts_with("qwen/qwen3")
+    {
+        model_family!(
+            slug,
+            slug,
+            apply_patch_tool_type: Some(ApplyPatchToolType::Function),
+        )
     } else {
         None
     }
@@ -127,5 +136,29 @@ pub fn derive_default_model_family(model: &str) -> ModelFamily {
         uses_local_shell_tool: false,
         apply_patch_tool_type: None,
         base_instructions: BASE_INSTRUCTIONS.to_string(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::tool_apply_patch::ApplyPatchToolType;
+
+    #[test]
+    fn lmstudio_models_use_function_apply_patch_tool() {
+        for slug in [
+            "mistralai/devstral-small-2507",
+            "qwen/qwen2.5-coder-14b",
+            "qwen/qwen3-coder-30b",
+            "qwen/qwen3-30b-a3b-2507",
+        ] {
+            let family = find_family_for_model(slug)
+                .unwrap_or_else(|| panic!("expected lmstudio slug {slug:?} to map"));
+            assert_eq!(
+                family.apply_patch_tool_type,
+                Some(ApplyPatchToolType::Function),
+                "LM Studio slug {slug} should expose the function-style apply_patch tool"
+            );
+        }
     }
 }

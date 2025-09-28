@@ -1060,6 +1060,55 @@ mod tests {
     }
 
     #[test]
+    fn lmstudio_models_include_apply_patch_tool() {
+        let model_family = find_family_for_model("qwen/qwen3-coder-30b")
+            .expect("LM Studio slugs should map to a model family");
+        let config = ToolsConfig::new(&ToolsConfigParams {
+            model_family: &model_family,
+            include_plan_tool: false,
+            include_apply_patch_tool: false,
+            include_web_search_request: false,
+            use_streamable_shell_tool: false,
+            include_view_image_tool: false,
+            experimental_unified_exec_tool: false,
+        });
+
+        let tools = get_openai_tools(&config, None);
+        assert!(tools.iter().any(|tool| match tool {
+            OpenAiTool::Function(ResponsesApiTool { name, .. }) => name == "apply_patch",
+            _ => false,
+        }));
+    }
+
+    #[test]
+    fn chat_completions_tools_include_apply_patch_for_lmstudio() {
+        let model_family = find_family_for_model("qwen/qwen3-coder-30b")
+            .expect("LM Studio slugs should map to a model family");
+        let config = ToolsConfig::new(&ToolsConfigParams {
+            model_family: &model_family,
+            include_plan_tool: false,
+            include_apply_patch_tool: false,
+            include_web_search_request: false,
+            use_streamable_shell_tool: false,
+            include_view_image_tool: false,
+            experimental_unified_exec_tool: false,
+        });
+
+        let tools = get_openai_tools(&config, None);
+        let chat_tools = create_tools_json_for_chat_completions_api(&tools)
+            .expect("conversion to chat tools should succeed");
+
+        assert!(chat_tools.iter().any(|tool| {
+            tool.get("type").and_then(JsonValue::as_str) == Some("function")
+                && tool
+                    .get("function")
+                    .and_then(|fn_value| fn_value.get("name"))
+                    .and_then(JsonValue::as_str)
+                    == Some("apply_patch")
+        }));
+    }
+
+    #[test]
     fn test_shell_tool() {
         let tool = super::create_shell_tool();
         let OpenAiTool::Function(ResponsesApiTool {
