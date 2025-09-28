@@ -96,7 +96,7 @@ Codex understands the following architecture aliases when `--backend lmstudio` i
 | `qwen3-moe`    | `qwen/qwen3-coder-30b`                |
 | `qwen3-moe-a3b`| `qwen/qwen3-30b-a3b-2507`             |
 
-You can also pass the exact LM Studio identifier (for example `my-org/custom-model`) if you are running a different checkpoint. Codex verifies that the requested model is available from LM Studio and surfaces clear errors when it is not.
+Aliases are case-insensitive and you can mix spaces, hyphens, or underscores (for example, `qwen3 coder 30b a3b`). You can also pass the exact LM Studio identifier (for example `my-org/custom-model`) if you are running a different checkpoint. Codex verifies that the requested model is available from LM Studio and surfaces clear errors when it is not.
 
 When you select the LM Studio backend Codex automatically enables structured JSON output so the agent can reliably capture command results. No extra flags are required.
 
