@@ -7,6 +7,7 @@ use crate::codex_tool_config::CodexToolCallReplyParam;
 use crate::codex_tool_config::create_tool_for_codex_tool_call_param;
 use crate::codex_tool_config::create_tool_for_codex_tool_call_reply_param;
 use crate::error_code::INVALID_REQUEST_ERROR_CODE;
+use crate::internal_tools::InternalToolRegistry;
 use crate::outgoing_message::OutgoingMessageSender;
 use codex_protocol::mcp_protocol::ClientRequest;
 use codex_protocol::mcp_protocol::ConversationId;
@@ -37,13 +38,30 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 use tokio::task;
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum ServerMode {
+    CodexGateway,
+    InternalTools,
+}
+
+impl ServerMode {
+    pub fn server_name(self) -> &'static str {
+        match self {
+            ServerMode::CodexGateway => "codex-mcp-server",
+            ServerMode::InternalTools => "codex-mcp-internal",
+        }
+    }
+}
+
 pub(crate) struct MessageProcessor {
-    codex_message_processor: CodexMessageProcessor,
+    codex_message_processor: Option<CodexMessageProcessor>,
     outgoing: Arc<OutgoingMessageSender>,
     initialized: bool,
     codex_linux_sandbox_exe: Option<PathBuf>,
-    conversation_manager: Arc<ConversationManager>,
+    conversation_manager: Option<Arc<ConversationManager>>,
     running_requests_id_to_codex_uuid: Arc<Mutex<HashMap<RequestId, ConversationId>>>,
+    server_mode: ServerMode,
+    internal_tools: Option<Arc<InternalToolRegistry>>,
 }
 
 impl MessageProcessor {
@@ -53,17 +71,29 @@ impl MessageProcessor {
         outgoing: OutgoingMessageSender,
         codex_linux_sandbox_exe: Option<PathBuf>,
         config: Arc<Config>,
+        server_mode: ServerMode,
     ) -> Self {
         let outgoing = Arc::new(outgoing);
-        let auth_manager = AuthManager::shared(config.codex_home.clone());
-        let conversation_manager = Arc::new(ConversationManager::new(auth_manager.clone()));
-        let codex_message_processor = CodexMessageProcessor::new(
-            auth_manager,
-            conversation_manager.clone(),
-            outgoing.clone(),
-            codex_linux_sandbox_exe.clone(),
-            config,
-        );
+        let internal_tools = match server_mode {
+            ServerMode::InternalTools => Some(Arc::new(InternalToolRegistry::new(config.clone()))),
+            ServerMode::CodexGateway => None,
+        };
+
+        let (codex_message_processor, conversation_manager) = match server_mode {
+            ServerMode::CodexGateway => {
+                let auth_manager = AuthManager::shared(config.codex_home.clone());
+                let conversation_manager = Arc::new(ConversationManager::new(auth_manager.clone()));
+                let processor = CodexMessageProcessor::new(
+                    auth_manager,
+                    conversation_manager.clone(),
+                    outgoing.clone(),
+                    codex_linux_sandbox_exe.clone(),
+                    config,
+                );
+                (Some(processor), Some(conversation_manager))
+            }
+            ServerMode::InternalTools => (None, None),
+        };
         Self {
             codex_message_processor,
             outgoing,
@@ -71,18 +101,19 @@ impl MessageProcessor {
             codex_linux_sandbox_exe,
             conversation_manager,
             running_requests_id_to_codex_uuid: Arc::new(Mutex::new(HashMap::new())),
+            server_mode,
+            internal_tools,
         }
     }
 
     pub(crate) async fn process_request(&mut self, request: JSONRPCRequest) {
-        if let Ok(request_json) = serde_json::to_value(request.clone())
+        if let Some(codex_processor) = &mut self.codex_message_processor
+            && let Ok(request_json) = serde_json::to_value(request.clone())
             && let Ok(codex_request) = serde_json::from_value::<ClientRequest>(request_json)
         {
             // If the request is a Codex request, handle it with the Codex
             // message processor.
-            self.codex_message_processor
-                .process_request(codex_request)
-                .await;
+            codex_processor.process_request(codex_request).await;
             return;
         }
 
@@ -233,7 +264,7 @@ impl MessageProcessor {
             instructions: None,
             protocol_version: params.protocol_version.clone(),
             server_info: mcp_types::Implementation {
-                name: "codex-mcp-server".to_string(),
+                name: self.server_mode.server_name().to_string(),
                 version: env!("CARGO_PKG_VERSION").to_string(),
                 title: Some("Codex".to_string()),
                 user_agent: Some(get_codex_user_agent()),
@@ -318,11 +349,16 @@ impl MessageProcessor {
         params: <mcp_types::ListToolsRequest as mcp_types::ModelContextProtocolRequest>::Params,
     ) {
         tracing::trace!("tools/list -> {params:?}");
+        let mut tools = Vec::new();
+        if let Some(registry) = &self.internal_tools {
+            tools.extend(registry.list_tools());
+        }
+        if self.codex_message_processor.is_some() {
+            tools.push(create_tool_for_codex_tool_call_param());
+            tools.push(create_tool_for_codex_tool_call_reply_param());
+        }
         let result = ListToolsResult {
-            tools: vec![
-                create_tool_for_codex_tool_call_param(),
-                create_tool_for_codex_tool_call_reply_param(),
-            ],
+            tools,
             next_cursor: None,
         };
 
@@ -337,6 +373,16 @@ impl MessageProcessor {
     ) {
         tracing::info!("tools/call -> params: {:?}", params);
         let CallToolRequestParams { name, arguments } = params;
+
+        if let Some(registry) = &self.internal_tools
+            && let Some(result) = registry
+                .try_call_tool(name.as_str(), arguments.clone())
+                .await
+        {
+            self.send_response::<mcp_types::CallToolRequest>(id, result)
+                .await;
+            return;
+        }
 
         match name.as_str() {
             "codex" => self.handle_tool_call_codex(id, arguments).await,
@@ -360,6 +406,20 @@ impl MessageProcessor {
         }
     }
     async fn handle_tool_call_codex(&self, id: RequestId, arguments: Option<serde_json::Value>) {
+        let Some(conversation_manager) = &self.conversation_manager else {
+            let result = CallToolResult {
+                content: vec![ContentBlock::TextContent(TextContent {
+                    r#type: "text".to_owned(),
+                    text: "Codex conversations are not available on this server".to_owned(),
+                    annotations: None,
+                })],
+                is_error: Some(true),
+                structured_content: None,
+            };
+            self.send_response::<mcp_types::CallToolRequest>(id, result)
+                .await;
+            return;
+        };
         let (initial_prompt, config): (String, Config) = match arguments {
             Some(json_val) => match serde_json::from_value::<CodexToolCallParam>(json_val) {
                 Ok(tool_cfg) => match tool_cfg.into_config(self.codex_linux_sandbox_exe.clone()) {
@@ -416,7 +476,7 @@ impl MessageProcessor {
 
         // Clone outgoing and server to move into async task.
         let outgoing = self.outgoing.clone();
-        let conversation_manager = self.conversation_manager.clone();
+        let conversation_manager = conversation_manager.clone();
         let running_requests_id_to_codex_uuid = self.running_requests_id_to_codex_uuid.clone();
 
         // Spawn an async task to handle the Codex session so that we do not
@@ -506,11 +566,22 @@ impl MessageProcessor {
         let outgoing = self.outgoing.clone();
         let running_requests_id_to_codex_uuid = self.running_requests_id_to_codex_uuid.clone();
 
-        let codex = match self
-            .conversation_manager
-            .get_conversation(conversation_id)
-            .await
-        {
+        let Some(conversation_manager) = &self.conversation_manager else {
+            let result = CallToolResult {
+                content: vec![ContentBlock::TextContent(TextContent {
+                    r#type: "text".to_owned(),
+                    text: "Codex conversations are not available on this server".to_owned(),
+                    annotations: None,
+                })],
+                is_error: Some(true),
+                structured_content: None,
+            };
+            self.send_response::<mcp_types::CallToolRequest>(request_id, result)
+                .await;
+            return;
+        };
+
+        let codex = match conversation_manager.get_conversation(conversation_id).await {
             Ok(c) => c,
             Err(_) => {
                 tracing::warn!("Session not found for conversation_id: {conversation_id}");
@@ -591,11 +662,12 @@ impl MessageProcessor {
         tracing::info!("conversation_id: {conversation_id}");
 
         // Obtain the Codex conversation from the server.
-        let codex_arc = match self
-            .conversation_manager
-            .get_conversation(conversation_id)
-            .await
-        {
+        let Some(conversation_manager) = &self.conversation_manager else {
+            tracing::warn!("No Codex conversation manager available for cancel request");
+            return;
+        };
+
+        let codex_arc = match conversation_manager.get_conversation(conversation_id).await {
             Ok(c) => c,
             Err(_) => {
                 tracing::warn!("Session not found for conversation_id: {conversation_id}");

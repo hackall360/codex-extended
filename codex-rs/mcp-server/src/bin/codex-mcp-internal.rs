@@ -8,7 +8,7 @@ fn main() -> anyhow::Result<()> {
         run_main(
             codex_linux_sandbox_exe,
             CliConfigOverrides::default(),
-            ServerMode::CodexGateway,
+            ServerMode::InternalTools,
         )
         .await?;
         Ok(())

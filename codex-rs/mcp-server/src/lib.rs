@@ -25,12 +25,14 @@ mod codex_tool_config;
 mod codex_tool_runner;
 mod error_code;
 mod exec_approval;
+mod internal_tools;
 mod json_to_toml;
 pub(crate) mod message_processor;
 mod outgoing_message;
 mod patch_approval;
 
 use crate::message_processor::MessageProcessor;
+pub use crate::message_processor::ServerMode;
 use crate::outgoing_message::OutgoingMessage;
 use crate::outgoing_message::OutgoingMessageSender;
 
@@ -49,6 +51,7 @@ const CHANNEL_CAPACITY: usize = 128;
 pub async fn run_main(
     codex_linux_sandbox_exe: Option<PathBuf>,
     cli_config_overrides: CliConfigOverrides,
+    server_mode: ServerMode,
 ) -> IoResult<()> {
     // Install a simple subscriber so `tracing` output is visible.  Users can
     // control the log level with `RUST_LOG`.
@@ -104,6 +107,7 @@ pub async fn run_main(
             outgoing_message_sender,
             codex_linux_sandbox_exe,
             std::sync::Arc::new(config),
+            server_mode,
         );
         async move {
             while let Some(msg) = incoming_rx.recv().await {

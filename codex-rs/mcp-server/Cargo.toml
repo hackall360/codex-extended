@@ -7,6 +7,10 @@ version = { workspace = true }
 name = "codex-mcp-server"
 path = "src/main.rs"
 
+[[bin]]
+name = "codex-mcp-internal"
+path = "src/bin/codex-mcp-internal.rs"
+
 [lib]
 name = "codex_mcp_server"
 path = "src/lib.rs"
@@ -21,6 +25,7 @@ codex-common = { workspace = true, features = ["cli"] }
 codex-core = { workspace = true }
 codex-login = { workspace = true }
 codex-protocol = { workspace = true }
+codex-apply-patch = { workspace = true }
 mcp-types = { workspace = true }
 schemars = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
